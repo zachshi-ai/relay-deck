@@ -135,6 +135,8 @@ node scripts/e2e-boundary.mjs            # 边界：坏输入 / spawn 失败 / �
 node scripts/e2e-session-recovery.mjs    # 续跑线失效自愈（脚本自己制造故障）
 node scripts/e2e-board-status.mjs        # 板级状态帧：中台状态 → 要发给板的 16 字节
 node scripts/e2e-cancel.mjs              # 单条精确取消（不影响并发的其他轮）
+node scripts/check-hardware.mjs          # 硬件就绪自检：什么已就绪、什么需要你操作
+node scripts/check-delivery.mjs          # 交付物一致性：测试数/证据引用/脚本名/链接/编译产物
 ```
 
 单测 fixture 全部来自**真实抓取**的输出，不是编造的。

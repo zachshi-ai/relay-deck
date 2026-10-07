@@ -158,10 +158,14 @@ export function sequenceIsNewer(candidate, baseline) {
 /**
  * 起始序号：从"当前时间秒数"起算，而不是从 0 起算。
  *
- * 为什么必须这样：固件在 apply_pending_agent_status() 里同时收 BLE 与 USB 两条来源，
- * 用 `agent_status_sequence_is_newer(usb.seq, ble.seq)` 决定谁生效——**序号小的会被丢弃**。
- * 桌面 App 的序号是从 0 开始的，中台若也从 0 开始，发出去的帧会被静默丢掉
- * （现象就是"灯不跟着中台走"）。用一个纪元基准起步，可以保证中台的序号天生更大。
+ * 准确语义（重读过固件的 take_pending_agent_status —— 它是**消费型**的）：
+ *   - 只有 USB 一路有帧挂起时，`!pending` 成立 → **一定生效，与序号无关**；
+ *   - 只有当 BLE 与 USB 在**同一轮循环里都挂着待处理帧**时，才比较序号，
+ *     此时 `agent_status_sequence_is_newer(usb.seq, ble.seq)` 为假的那一帧被丢弃。
+ *
+ * 也就是说竞争窗口很窄，但确实存在。桌面 App 的序号从 0 起算，中台若也从 0 起算，
+ * 就有概率在这个窄窗口里输掉、那一帧被静默丢弃（现象：灯偶尔不跟着中台走）。
+ * 从纪元起步可以让中台**天生赢下这个比较**，代价只是序号大一些。
  */
 export function epochSequence(now = Date.now()) {
   return Math.floor(now / 1000) & 0x3fff_ffff;
