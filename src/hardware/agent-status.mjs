@@ -156,6 +156,18 @@ export function sequenceIsNewer(candidate, baseline) {
 }
 
 /**
+ * 起始序号：从"当前时间秒数"起算，而不是从 0 起算。
+ *
+ * 为什么必须这样：固件在 apply_pending_agent_status() 里同时收 BLE 与 USB 两条来源，
+ * 用 `agent_status_sequence_is_newer(usb.seq, ble.seq)` 决定谁生效——**序号小的会被丢弃**。
+ * 桌面 App 的序号是从 0 开始的，中台若也从 0 开始，发出去的帧会被静默丢掉
+ * （现象就是"灯不跟着中台走"）。用一个纪元基准起步，可以保证中台的序号天生更大。
+ */
+export function epochSequence(now = Date.now()) {
+  return Math.floor(now / 1000) & 0x3fff_ffff;
+}
+
+/**
  * 生成"要发给板子的一帧"：把 LED 真值表与 board 状态合起来，方便主机侧直接发。
  * @returns {{reportId:number, payload:Uint8Array, state:number, sequence:number, sourceHash:number, color:number[]}}
  */
@@ -187,7 +199,7 @@ export function buildBoardStatus({
   runStatuses = [],
   acknowledged = false,
   conversationId = '',
-  sequence = 0,
+  sequence = epochSequence(),
   ttlMs = 10 * 60 * 1000,
 } = {}) {
   const state = aggregateAgentStatus({ runStatuses, acknowledged });

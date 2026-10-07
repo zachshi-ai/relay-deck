@@ -94,8 +94,9 @@ let focusMessageId = null;
 const runStatus = new Map(); // agentId → 'idle' | 'running' | 'ok' | 'error'
 let viewIndex = 0;
 let activeConversationId = store.latestConversationId();
-// 板级状态帧：sequence 只在状态变化时递增；用户动过手就视为"已读"
-let boardStatusSequence = 0;
+// 板级状态帧：sequence 只在状态变化时递增；用户动过手就视为"已读"。
+// 从纪元起步（而不是 0）：固件会拿它和 BLE 侧序号比较，小的会被丢弃。
+let boardStatusSequence = epochSequence();
 let boardStatusState = null;
 let boardAcknowledged = true;
 

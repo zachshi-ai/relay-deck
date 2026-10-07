@@ -28,13 +28,14 @@
 | **板载 LED 协议对接** | ✅ 端到端已验 | **复用固件已有的 Agent Status v1**（report `0x12`）：聚合帧 + 编码器 + [13/13 验收](evidence/)，见 [阶段2b 清单](docs/hardware-stage2b.md) |
 | 全局热键守护进程 | ✅ 已编译 | `tools/hotkeyd.swift`（Swift，CGEventTap），`--selftest` 实测通 |
 | 硬件模拟器 | ✅ | `bin/simulate.mjs`，没板子也能驱动整条链路 |
+| **实板 HID 工具** | ✅ 已实测 | `tools/hidtool.swift`：设备身份、Feature 写通路、五色灯序下发（[实测记录](docs/hardware-stage2b.md)） |
 | 按 Agent 串行队列 | ✅ | `src/core/queue.mjs`（kimi 的 runner.lock 拒绝并发） |
 | **单条精确取消** | ✅ | 每轮有 runId + AbortController：`POST /api/cancel {runId\|agent\|all}`，取消不算失败、不触发自愈重试 |
 | **续跑线自愈** | ✅ | 坏 session 自动丢弃重跑，如实上报 `contextReset`（`src/core/session-recovery.mjs`） |
 | HTTP 层端到端验收 | ✅ | `evidence/http-e2e-*.json`：**11/11 项通过**（三组） |
 | 边界验证 | ✅ | `evidence/boundary-*.json`：**10/10**（坏焦点/未绑定输入/未知 Agent/spawn 失败/超时/并发） |
 | 会话失效自愈验收 | ✅ | `evidence/session-recovery-*.json`：**7/7** |
-| 单元测试 | ✅ | **86 项**，fixture 全部来自真实抓取 |
+| 单元测试 | ✅ | **87 项**，fixture 全部来自真实抓取 |
 
 **跨 Agent 接力的真实验收长这样**：先让 `dsh` 回答出「已记住 42」，再把它的回答作为引用上下文接力给下游 Agent——下游自己的会话里从未出现过 42，它答出 `42`，证明接力上下文确实送达。
 对**没有续跑能力**的 Agent（MiniMax / Kimi）还会多验一轮：**不给接力上下文**再问一次，靠中台注入的历史答对，才算兜底真的生效。
@@ -72,6 +73,12 @@ swiftc -O tools/hotkeyd.swift -o tools/hotkeyd
 ./tools/hotkeyd --list        # 打印映射
 ./tools/hotkeyd --selftest    # 不通系统权限也能验证到中台的链路
 ./tools/hotkeyd               # 正式监听（需辅助功能权限）
+
+# 实板工具（IOKit HID，零依赖）
+swiftc -O tools/hidtool.swift -o tools/hidtool
+./tools/hidtool list          # 找到 EasyInput 0x303A:0x1006 即成功
+./tools/hidtool diagnose      # 逐个 report 试读写
+./tools/hidtool agent-sweep   # 肉眼确认：暗蓝 → 红 → 绿 → 琥珀 → 熄灭
 ```
 
 板子侧只需要**配一组组合键**（⌥⌘1–5 / ⌥⌘←→ / ⌥⌘C / ⌥⌘B / ⌥⌘Esc）当作控制通道——阶段 2a 零固件改动；阶段 2b 再把它换成 BLE 结构化命令并获得 LED 回传。
@@ -115,7 +122,7 @@ server.mjs  ── 中台 ──────────────────
 ## 测试与验收
 
 ```bash
-node --test                              # 86 项单测
+node --test                              # 87 项单测
 node scripts/e2e-relay.mjs               # 真实接力（逐 Agent 验会话续跑）
 node scripts/e2e-http.mjs                # HTTP 层端到端：默认验 dsh → codex
 node scripts/e2e-http.mjs dsh minimax    # 换一对验（含历史兜底那一轮）

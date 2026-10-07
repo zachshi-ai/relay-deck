@@ -110,3 +110,53 @@ USB 与 BLE 两条路都在，但 Node 没有内置 HID/GATT 写入能力，需�
 | 7. 状态机联动 | 发起一轮真实接力 | 灯从 Idle → Running（暗蓝）→ CompletedUnread（绿） |
 
 第 5、6、7 步是我目前**唯一没有实测的东西**——板子回来后按这个顺序做，做完把结果写回作业正文的 §6（把"未完成"改成实测结论）。
+
+## 六、实板实测记录（2026-10-07，板子已插上 USB）
+
+用 `tools/hidtool.swift`（IOKit HID，零依赖；`swiftc -O tools/hidtool.swift -o tools/hidtool`）在真机上跑出来的结果：
+
+### 已验证 ✅
+
+| 项 | 结果 |
+| --- | --- |
+| 设备身份 | `EasyInput AI`，VID `0x303A` / PID `0x1006`，序列号字符串 `easy-input-v2`（ioreg 与 IOKit 两边一致） |
+| HID 接口 | 只暴露 **1 个** 接口：usagePage `0x1` / usage `0x6`（键盘），`maxInput=64`、`maxFeature=64`、报告描述符 250 字节 |
+| Feature 写通路 | `SetReport(0x12 / 0x13 / 0x10)` **全部返回 `0x00000000` 成功** |
+| 灯色序列已下发 | 用纪元序号依次发 Running→Failed→CompletedUnread→WaitingUser→Idle，5 帧全部被 USB 栈接受 |
+
+### 踩到的坑 ⚠️
+
+1. **只调 `IOHIDManagerOpen` 不够**：此时 `SetReport` 会返回 `0xe00002cd`（`kIOReturnNotReadable`）。
+   必须对每个设备显式调 **`IOHIDDeviceOpen`**，之后 feature 写才真正成功。这是最容易卡住的一步。
+2. **固件的 `GET_REPORT` 是空实现**：`tud_hid_get_report_cb` 直接 `return 0`。
+   所以"读回 Agent 状态"这条路**不存在**——读回恒为全零，不能用它判断写入是否生效。
+3. **读输入报告需要 macOS「输入监控」权限**：状态请求 0x13 的回传走 0x11 输入报告，
+   没有该权限时 IOKit 的回调一条都不会触发（现象是"发了请求没反应"）。
+   权限位置：系统设置 → 隐私与安全性 → 输入监控（与 EasyInput.app 需要的辅助功能是两回事）。
+
+### 关键约束：序号仲裁 🔎
+
+固件在 `apply_pending_agent_status()` 里同时收 BLE 与 USB 两条来源：
+
+```cpp
+if (!pending || agent_status_sequence_is_newer(usb_command.sequence, selected.sequence))
+    selected = usb_command;   // 否则这一帧被丢弃
+```
+
+**这意味着中台的序号必须天生比桌面 App 的更大**，否则发出去的帧会被静默丢弃，
+现象就是"灯不跟着中台走"。已在主机侧实现：`epochSequence()` 从当前时间秒数起算，
+而不是从 0 起算；单测锁住了"纪元序号必须胜过从 0 起算的序号"。
+
+### 仍然只能肉眼确认的部分 ❓
+
+灯到底亮没亮——主机侧**没有任何可读回的通路**（GET_REPORT 未实现、没有串口日志）。
+所以最后一步是一条命令 + 一双眼睛：
+
+```bash
+./tools/hidtool agent-sweep     # 暗蓝 → 红 → 绿 → 琥珀 → 熄灭
+```
+
+看到这个顺序，就证明中台的 16 字节状态帧真的驱动了这 5 颗灯。
+若完全没变化，按顺序排查：①`agent status` 日志是否出现（需要串口/JTAG 日志）；
+②同时连接的 BLE 是否占了更高序号；③板子上的固件是否包含 Agent Status 这条路径
+（当前板子跑的是精听台阶段烧的 `0.4.53-idf-v2-ble-store-v1`，需要确认它是否含该功能）。

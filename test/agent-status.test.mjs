@@ -16,6 +16,7 @@ import {
   buildAgentStatusFrame,
   buildBoardStatus,
   aggregateAgentStatus,
+  epochSequence,
   AGENT_STATUS_COLORS,
 } from '../src/hardware/agent-status.mjs';
 
@@ -152,6 +153,16 @@ test('板级聚合帧：reportId / 载荷 / 灯色 / 状态名齐全，Idle 时 
   assert.equal(again.sourceHash, idle.sourceHash);
   const other = buildBoardStatus({ runStatuses: ['idle'], conversationId: 'c-2', sequence: 4 });
   assert.notEqual(other.sourceHash, idle.sourceHash);
+});
+
+test('序号从纪元起步：保证能胜过从 0 起算的桌面 App 序号', () => {
+  const base = epochSequence();
+  assert.ok(base > 1_000_000, `纪元序号应远大于桌面 App 的从 0 起算序号，实际 ${base}`);
+  assert.equal(sequenceIsNewer(base, 0), true, '中台的序号必须比"从 0 开始"更新');
+  assert.equal(sequenceIsNewer(0, base), false);
+  // 默认构造出来的帧就用纪元序号
+  const frame = buildBoardStatus({ runStatuses: ['running'] });
+  assert.ok(frame.sequence > 1_000_000, `实际 ${frame.sequence}`);
 });
 
 test('成帧函数给出可直接发送的 reportId / 载荷 / 灯色', () => {
