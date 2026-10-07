@@ -9,6 +9,16 @@ import { createInterface } from 'node:readline';
 
 const STDERR_CAP = 20000;
 
+/** 取 stderr 里最后一条有内容的行，用来做错误摘要（截断，避免把整段日志塞进界面） */
+function lastMeaningfulLine(stderr) {
+  const lines = String(stderr ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const last = lines.at(-1) ?? '';
+  return last.length > 200 ? `${last.slice(0, 200)}…` : last;
+}
+
 export async function runTurn({
   adapter,
   prompt,
@@ -175,7 +185,22 @@ export async function runTurn({
   if (cancelled) errorMessage = '已取消';
   else if (spawnError) errorMessage = `无法启动 ${adapter.command()}：${spawnError.message}`;
   else if (timedOut) errorMessage = `超时（${timeoutMs}ms）后已终止`;
-  else if (!errorMessage && !ok) errorMessage = stderr.trim() || '没有产出任何文本';
+  else if (!ok) {
+    const stderrTail = lastMeaningfulLine(stderr);
+    const exitNote = typeof exitCode === 'number' && exitCode !== 0 ? `上游退出码 ${exitCode}` : '';
+    // 适配器给的"没有任何输出"这类**泛化**信息会把真正的原因盖住：
+    // 上游往往把 429 / 鉴权失败写在 stderr 里，退出码也带着信息。
+    // 这里把一手线索补上去，否则排错只能靠猜。
+    const generic = !errorMessage || /没有任何输出|没有产出任何文本|无输出/.test(errorMessage);
+    if (generic && (stderrTail || exitNote)) {
+      const parts = [errorMessage ?? '没有任何输出'];
+      if (exitNote) parts.push(exitNote);
+      if (stderrTail) parts.push(`上游 stderr：${stderrTail}`);
+      errorMessage = parts.join('｜');
+    } else if (!errorMessage) {
+      errorMessage = stderrTail || '没有产出任何文本';
+    }
+  }
 
   return {
     ok,

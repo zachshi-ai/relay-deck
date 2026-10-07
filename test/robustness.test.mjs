@@ -92,6 +92,37 @@ test('适配器的 parseOutput 抛异常 → 明确失败并说明原因，而�
   assert.match(result.error, /整体解析炸了/);
 });
 
+test('上游把关键错误写在 stderr 时，必须带出来（不能被"没有任何输出"盖住）', async () => {
+  // 真实场景：限流/鉴权失败往往只在 stderr 里出现一句，stdout 是空的。
+  // 适配器给出的是泛化的"没有任何输出"，若不补上 stderr，排错只能靠猜。
+  const adapter = scriptedAdapter('console.error("Error: 429 rate limited by upstream"); process.exit(0)', {
+    parseOutput: (out) => (out.trim() ? [{ type: 'raw', raw: out }] : [{ type: 'error', message: 'mmx 没有任何输出', fatal: true }]),
+  });
+  const result = await runTurn({ adapter, prompt: 'x', timeoutMs: 10000 });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /429/, `错误信息应带上 stderr 里的一手线索，实际：${result.error}`);
+  assert.match(result.error, /没有任何输出/, '原有信息也要保留，两者拼在一起');
+});
+
+test('非零退出码要被带进错误信息', async () => {
+  const adapter = scriptedAdapter('process.exit(3)', {
+    parseOutput: (out) => (out.trim() ? [] : [{ type: 'error', message: 'mmx 没有任何输出', fatal: true }]),
+  });
+  const result = await runTurn({ adapter, prompt: 'x', timeoutMs: 10000 });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /退出码 3/);
+});
+
+test('超长 stderr 只取最后一行并截断，不会把整段日志塞进错误信息', async () => {
+  const adapter = scriptedAdapter(
+    `console.error('x'.repeat(5000)); console.error('最后一行才是关键：上游 503'); process.exit(0);`,
+    { parseOutput: () => [{ type: 'error', message: '无输出', fatal: true }] },
+  );
+  const result = await runTurn({ adapter, prompt: 'x', timeoutMs: 10000 });
+  assert.match(result.error, /503/);
+  assert.ok(result.error.length < 400, `错误信息不该过长，实际 ${result.error.length}`);
+});
+
 test('stderr 过长会被截断，不会把内存撑爆', async () => {
   const adapter = scriptedAdapter(
     `for (let i=0;i<20000;i++) console.error('这一行是垃圾日志 '.repeat(5));
