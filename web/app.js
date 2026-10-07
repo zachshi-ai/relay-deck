@@ -18,6 +18,7 @@ const els = {
   messages: document.getElementById('messages'),
   searchInput: document.getElementById('searchInput'),
   searchInfo: document.getElementById('searchInfo'),
+  exportBtn: document.getElementById('exportBtn'),
   composer: document.getElementById('composer'),
   sendBtn: document.getElementById('sendBtn'),
   relayBtn: document.getElementById('relayBtn'),
@@ -585,6 +586,13 @@ els.searchInput.addEventListener('keydown', (event) => {
     els.searchInput.blur();
   }
 });
+els.exportBtn.onclick = () => {
+  if (!focusId) {
+    els.focusPill.textContent = '先选中一句（点消息或按 c/↑↓）再导出';
+    return;
+  }
+  window.open(`/api/export?message=${encodeURIComponent(focusId)}`, '_blank');
+};
 els.searchInfo.onclick = toggleScope;
 els.searchInfo.title = '单击切换搜索范围（本会话 / 全部会话）';
 els.liveClose.onclick = () => els.live.classList.add('hidden');

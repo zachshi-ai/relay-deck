@@ -8,6 +8,7 @@
 //   POST /api/cancel          终止当前所有在跑的子进程
 //   POST /api/hardware        { source, id?, gesture?, combo?, delta? } → 硬件命令入口
 //   GET  /api/hardware/led    → 当前 LED 真值表 + WS2812 帧
+//   GET  /api/export?message= → 把一条接力链导出成 Markdown
 //
 // 隐私：日志只打元数据（agent / 长度 / 耗时），不打印 prompt 与回答正文。
 import http from 'node:http';
@@ -22,6 +23,7 @@ import { buildRelayPrompt, buildHistoryPrompt, clip } from './src/core/relay.mjs
 import { runRoundtable } from './src/core/roundtable.mjs';
 import { createAgentQueue } from './src/core/queue.mjs';
 import { runTurnWithRecovery } from './src/core/session-recovery.mjs';
+import { exportChainMarkdown } from './src/core/export.mjs';
 import { resolveHardwareEvent, resolveHidCombo, describeCommand } from './src/hardware/keymap.mjs';
 import { computeLedState, toWs2812Frame, frameToHex, describeLedState } from './src/hardware/led.mjs';
 import { buildBoardStatus, aggregateAgentStatus, AGENT_STATUS_NAMES } from './src/hardware/agent-status.mjs';
@@ -361,6 +363,25 @@ const server = http.createServer(async (req, res) => {
     if (route === 'GET /api/lineage') {
       const messageId = url.searchParams.get('message');
       return json(res, 200, { lineage: messageId ? store.lineage(messageId) : [] });
+    }
+
+    // 把一条接力链导出成 Markdown，直接下载/复制给别人
+    if (route === 'GET /api/export') {
+      const messageId = url.searchParams.get('message') ?? focusMessageId;
+      const message = messageId ? store.getMessage(messageId) : null;
+      if (!message) return json(res, 404, { error: '没有可导出的焦点消息' });
+      const chain = store.lineage(message.id);
+      const markdown = exportChainMarkdown({
+        chain,
+        title: `接力链 · ${message.id}`,
+        conversationTitle: store.getConversation(message.conversationId)?.title ?? '',
+      });
+      res.writeHead(200, {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Content-Disposition': `attachment; filename="relay-${message.id}.md"`,
+      });
+      res.end(markdown);
+      return undefined;
     }
 
     if (route === 'POST /api/conversations') {
