@@ -28,8 +28,8 @@
 | **板载 LED 协议对接** | ✅ 端到端已验 | **复用固件已有的 Agent Status v1**（report `0x12`）：聚合帧 + 编码器 + [13/13 验收](evidence/)，见 [阶段2b 清单](docs/hardware-stage2b.md) |
 | 全局热键守护进程 | ✅ 已编译 | `tools/hotkeyd.swift`（Swift，CGEventTap），`--selftest` 实测通 |
 | 硬件模拟器 | ✅ | `bin/simulate.mjs`，没板子也能驱动整条链路 |
-| **实板 HID 工具** | ✅ 已实测 | `tools/hidtool.swift`：设备身份、Feature 写通路、五色灯序下发（[实测记录](docs/hardware-stage2b.md)） |
-| **中台 → 实板 桥** | ✅ 回路已通 | `src/hardware/bridge.mjs`：状态一变就调 hidtool 写 0x12；`RELAYDECK_HID_BRIDGE=1` 开启 |
+| **实板 HID 工具** | ⏸ 暂停使用 | `tools/hidtool.swift` 已实测过一次（设备身份、Feature 写通路）；**板子正被另一门课占用，按要求不再对设备做任何操作** |
+| **中台 → 实板 桥** | ⏸ 默认关闭不启用 | `src/hardware/bridge.mjs` 已实现且有单测；**默认关闭**，只有显式设 `RELAYDECK_HID_BRIDGE=1` 才会写设备 |
 | 按 Agent 串行队列 | ✅ | `src/core/queue.mjs`（kimi 的 runner.lock 拒绝并发） |
 | **单条精确取消** | ✅ | 每轮有 runId + AbortController：`POST /api/cancel {runId\|agent\|all}`，取消不算失败、不触发自愈重试 |
 | **续跑线自愈** | ✅ | 坏 session 自动丢弃重跑，如实上报 `contextReset`（`src/core/session-recovery.mjs`） |
@@ -81,8 +81,9 @@ swiftc -O tools/hidtool.swift -o tools/hidtool
 ./tools/hidtool diagnose      # 逐个 report 试读写
 ./tools/hidtool agent-sweep   # 肉眼确认：暗蓝 → 红 → 绿 → 琥珀 → 熄灭
 
-# 让板子跟着中台实时点灯（需要板子插着）
-RELAYDECK_HID_BRIDGE=1 node server.mjs
+# 注意：以下命令会写入实体设备。板子若是别的任务在用，不要运行。
+./tools/hidtool list          # 只读：确认设备身份
+RELAYDECK_HID_BRIDGE=1 node server.mjs   # 会写设备：中台状态变化时写 0x12
 ```
 
 板子侧只需要**配一组组合键**（⌥⌘1–5 / ⌥⌘←→ / ⌥⌘C / ⌥⌘B / ⌥⌘Esc）当作控制通道——阶段 2a 零固件改动；阶段 2b 再把它换成 BLE 结构化命令并获得 LED 回传。
