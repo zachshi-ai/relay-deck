@@ -35,6 +35,11 @@ export const AGENT_STATUS_COLORS = {
   4: [30, 0, 8], // Failed：红
 };
 
+/** 状态名，便于日志与界面显示 */
+export const AGENT_STATUS_NAMES = Object.freeze(
+  Object.fromEntries(Object.entries(AGENT_STATUS_STATES).map(([name, value]) => [value, name])),
+);
+
 function writeU32Le(view, offset, value) {
   const v = Number(value) >>> 0;
   view[offset + 0] = v & 0xff;
@@ -115,6 +120,25 @@ export function mapRunStatusToAgentState({ runStatus = 'idle', acknowledged = fa
   }
 }
 
+/**
+ * 聚合：板子的 Agent Status **一次只显示一个状态**（后到的覆盖先到的，
+ * 且以径向渐变铺满 5 颗灯）。所以主机侧必须先决定"现在最该让用户看到哪一件事"。
+ *
+ * 优先级：在跑 > 失败 > 有结果未读 > 在等用户 > 空闲。
+ * 理由：跑着的不能被打断；失败最需要被看到；结果未读次之；空闲说明一切正常。
+ *
+ * @param {object} p
+ * @param {string[]|Record<string,string>} p.runStatuses 各 Agent 的轮次状态
+ */
+export function aggregateAgentStatus({ runStatuses = [], acknowledged = false } = {}) {
+  const statuses = Array.isArray(runStatuses) ? runStatuses : Object.values(runStatuses);
+  if (statuses.includes('running')) return AGENT_STATUS_STATES.Running;
+  if (statuses.includes('error')) return AGENT_STATUS_STATES.Failed;
+  if (!acknowledged && statuses.includes('ok')) return AGENT_STATUS_STATES.CompletedUnread;
+  if (statuses.includes('waiting')) return AGENT_STATUS_STATES.WaitingUser;
+  return AGENT_STATUS_STATES.Idle;
+}
+
 /** 稳定的 32 位来源哈希（FNV-1a）：同一个会话/Agent 永远得到同一个值 */
 export function sourceHash(text) {
   let hash = 0x811c9dc5;
@@ -143,8 +167,40 @@ export function buildAgentStatusFrame({ runStatus, conversationId = '', agentId 
     reportId: AGENT_STATUS_REPORT_ID,
     payload,
     state,
+    stateName: AGENT_STATUS_NAMES[state],
     sequence,
     sourceHash: hash,
     color: AGENT_STATUS_COLORS[state],
+  };
+}
+
+/**
+ * 板级聚合帧：这是阶段 2b **真正要发给板子**的东西。
+ *
+ * 与 buildAgentStatusFrame 的区别：那个是"某个 Agent 的状态"，这个是把所有 Agent
+ * 收敛成一件最该被看到的事——因为板子一次只渲染一个状态。
+ *
+ * 注意固件会丢弃**完全相同**的帧（state/flags/sequence/ttl/source 全同），
+ * 所以只在状态变化时递增 sequence 即可；不变时重复发送等于刷新 TTL，是安全的。
+ */
+export function buildBoardStatus({
+  runStatuses = [],
+  acknowledged = false,
+  conversationId = '',
+  sequence = 0,
+  ttlMs = 10 * 60 * 1000,
+} = {}) {
+  const state = aggregateAgentStatus({ runStatuses, acknowledged });
+  const hash = sourceHash(`relaydeck:${conversationId}`);
+  const payload = encodeAgentStatus({ state, sequence, ttlMs, sourceHash: hash });
+  return {
+    reportId: AGENT_STATUS_REPORT_ID,
+    payload: [...payload],
+    state,
+    stateName: AGENT_STATUS_NAMES[state],
+    color: AGENT_STATUS_COLORS[state],
+    sequence,
+    ttlMs: state === AGENT_STATUS_STATES.Idle ? 0 : ttlMs,
+    sourceHash: hash,
   };
 }

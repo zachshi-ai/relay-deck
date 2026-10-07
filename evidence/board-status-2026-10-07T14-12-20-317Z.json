@@ -1,0 +1,179 @@
+{
+  "kind": "relaydeck-board-status-e2e",
+  "ranAt": "2026-10-07T14:12:20.317Z",
+  "base": "http://127.0.0.1:8787",
+  "checks": [
+    {
+      "name": "基线状态是 Idle",
+      "passed": true,
+      "detail": "Idle"
+    },
+    {
+      "name": "Idle 时 TTL 必须为 0（等于清状态）",
+      "passed": true,
+      "detail": "ttl=0"
+    },
+    {
+      "name": "载荷能被固件规则解码",
+      "passed": true,
+      "detail": "decode ok"
+    },
+    {
+      "name": "reportId 是固件声明的 0x12",
+      "passed": true,
+      "detail": "reportId=18"
+    },
+    {
+      "name": "硬件接力被接受",
+      "passed": true,
+      "detail": "dsh"
+    },
+    {
+      "name": "接力进行中 → 板级状态为 Running（暗蓝）",
+      "passed": false,
+      "detail": "Idle color=[0,0,0]"
+    },
+    {
+      "name": "Running 的 TTL 不为 0（否则板子会当成清状态）",
+      "passed": false,
+      "detail": "ttl=0"
+    },
+    {
+      "name": "状态变化时 sequence 递增（固件用它去重）",
+      "passed": false,
+      "detail": "1 → 1"
+    },
+    {
+      "name": "轮次结束后不再是 Running",
+      "passed": false,
+      "detail": "超时仍是 Running"
+    },
+    {
+      "name": "用户动过之后回到 Idle（灯灭）",
+      "passed": false,
+      "detail": "Running"
+    },
+    {
+      "name": "重复读取不改变 sequence（状态没变不该刷号）",
+      "passed": true,
+      "detail": "2 vs 2"
+    },
+    {
+      "name": "来源哈希稳定",
+      "passed": true,
+      "detail": "3533155282"
+    }
+  ],
+  "timeline": [
+    {
+      "at": "2026-10-07T14:12:20.356Z",
+      "label": "baseline",
+      "state": 0,
+      "stateName": "Idle",
+      "sequence": 1,
+      "ttlMs": 0,
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "payloadValid": true,
+      "payload": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        210,
+        171,
+        151,
+        210
+      ]
+    },
+    {
+      "at": "2026-10-07T14:12:20.362Z",
+      "label": "during-turn",
+      "state": 0,
+      "stateName": "Idle",
+      "sequence": 1,
+      "ttlMs": 0,
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "payloadValid": true,
+      "payload": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        210,
+        171,
+        151,
+        210
+      ]
+    },
+    {
+      "at": "2026-10-07T14:13:20.648Z",
+      "label": "after-ack",
+      "state": 1,
+      "stateName": "Running",
+      "sequence": 2,
+      "ttlMs": 600000,
+      "color": [
+        0,
+        0,
+        28
+      ],
+      "payloadValid": true,
+      "payload": [
+        1,
+        1,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0,
+        192,
+        39,
+        9,
+        0,
+        210,
+        171,
+        151,
+        210
+      ]
+    }
+  ],
+  "states": {
+    "0": "Idle",
+    "1": "Running",
+    "2": "WaitingUser",
+    "3": "CompletedUnread",
+    "4": "Failed"
+  },
+  "enumValues": {
+    "Idle": 0,
+    "Running": 1,
+    "WaitingUser": 2,
+    "CompletedUnread": 3,
+    "Failed": 4
+  }
+}

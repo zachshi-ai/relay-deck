@@ -24,6 +24,7 @@ import { createAgentQueue } from './src/core/queue.mjs';
 import { runTurnWithRecovery } from './src/core/session-recovery.mjs';
 import { resolveHardwareEvent, resolveHidCombo, describeCommand } from './src/hardware/keymap.mjs';
 import { computeLedState, toWs2812Frame, frameToHex, describeLedState } from './src/hardware/led.mjs';
+import { buildBoardStatus, aggregateAgentStatus, AGENT_STATUS_NAMES } from './src/hardware/agent-status.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(HERE, 'web');
@@ -47,6 +48,10 @@ let focusMessageId = null;
 const runStatus = new Map(); // agentId → 'idle' | 'running' | 'ok' | 'error'
 let viewIndex = 0;
 let activeConversationId = store.latestConversationId();
+// 板级状态帧：sequence 只在状态变化时递增；用户动过手就视为"已读"
+let boardStatusSequence = 0;
+let boardStatusState = null;
+let boardAcknowledged = true;
 
 function setRunStatus(agentId, status) {
   runStatus.set(agentId, status);
@@ -57,7 +62,7 @@ function conversationMessages(conversationId = activeConversationId) {
   return store.listMessages({ conversationId });
 }
 
-/** LED 快照：真值表见 src/hardware/led.mjs */
+/** LED 快照：真值表见 src/hardware/led.mjs；board 是阶段 2b 真正要发给板子的聚合帧 */
 function ledSnapshot() {
   const state = computeLedState({
     agentIds: ADAPTERS.map((a) => a.id),
@@ -68,7 +73,30 @@ function ledSnapshot() {
     blinkPhase: Math.floor(Date.now() / 500) % 2,
   });
   const frame = toWs2812Frame(state);
-  return { ...state, frame: [...frame], frameHex: frameToHex(frame), summary: describeLedState(state) };
+
+  // 板子一次只渲染一个状态，所以这里把各 Agent 的状态收敛成"最该被看到的一件事"。
+  // sequence 只在状态变化时递增（固件会丢弃完全相同的帧，重复发送等于刷新 TTL）。
+  const runStatuses = ADAPTERS.map((a) => runStatus.get(a.id) ?? 'idle');
+  const boardState = aggregateAgentStatus({ runStatuses, acknowledged: boardAcknowledged });
+  if (boardState !== boardStatusState) {
+    boardStatusState = boardState;
+    boardStatusSequence += 1;
+    log('led', `板级状态 → ${AGENT_STATUS_NAMES[boardState]}（seq=${boardStatusSequence}）`);
+  }
+  const board = buildBoardStatus({
+    runStatuses,
+    acknowledged: boardAcknowledged,
+    conversationId: activeConversationId,
+    sequence: boardStatusSequence,
+  });
+
+  return {
+    ...state,
+    frame: [...frame],
+    frameHex: frameToHex(frame),
+    summary: describeLedState(state),
+    board,
+  };
 }
 
 function log(...args) {
@@ -153,6 +181,9 @@ async function askOnce({
 }) {
   const adapter = getAdapter(agentId);
   activeConversationId = conversationId;
+  // 必须在任何 await 之前同步置位：硬件通路是"按下即走"，
+  // 调用方紧接着就读 LED，晚一个微任务板子上就看不到 Running。
+  setRunStatus(agentId, 'running');
   const focus = relayOf ? store.getMessage(relayOf) : null;
   const upstream = focus
     ? focus.role === 'agent'
@@ -184,7 +215,6 @@ async function askOnce({
   }
 
   const started = Date.now();
-  setRunStatus(agentId, 'running');
   const existingSession = store.getAgentSession(conversationId, agentId);
   // 同一个 Agent 串行（kimi 的 runner.lock 拒绝并发；连按两下也不该起两个进程）；
   // 续跑线失效时自动丢掉旧线重跑一次，避免整个会话被一条坏 session 永久卡死。
@@ -205,6 +235,8 @@ async function askOnce({
   const result = recovery.result;
   // 硬件侧的 LED 靠这个状态点灯，成败都要如实落到灯上
   setRunStatus(agentId, result.ok ? 'ok' : 'error');
+  // 有新结果但用户还没看：板子上应该亮"完成未读"（绿灯）
+  if (result.ok) boardAcknowledged = false;
 
   if (recovery.contextReset) {
     log('session', agentId, `续跑线失效，已重置上下文重跑（旧线 ${String(recovery.previousSession).slice(0, 20)}…）`);
@@ -292,6 +324,8 @@ const server = http.createServer(async (req, res) => {
         focusMessageId = null;
         return json(res, 404, { error: '找不到该消息' });
       }
+      // 用户在动焦点 = 他看到了结果，板子上的"未读绿灯"可以熄了
+      boardAcknowledged = true;
       return json(res, 200, statePayload(body.conversationId));
     }
 
@@ -347,7 +381,9 @@ const server = http.createServer(async (req, res) => {
             (body.prompt && String(body.prompt).trim()) ||
             '请基于引用上下文继续，直接给结论，不要复述原文。';
           result.agent = target;
-          // 硬件通路是"按下即走"，不阻塞等待：立刻返回，LED 随之进入 running
+          // 硬件通路是"按下即走"，不阻塞等待。但**必须在返回之前**把状态标成 running：
+          // 否则返回体里那帧 LED 还是 Idle，桥接层照它点灯就会漏掉"正在跑"。
+          setRunStatus(target, 'running');
           askOnce({
             agentId: target,
             instruction,
@@ -460,6 +496,8 @@ const server = http.createServer(async (req, res) => {
       const sse = openSse(res);
       const childRef = { child: null };
       const conversationId = store.ensureConversation(body.conversationId ?? store.latestConversationId());
+      // 用户主动发起 = 他看到了之前的结果
+      boardAcknowledged = true;
       try {
         const result = await askOnce({
           agentId: String(body.agent),
@@ -490,6 +528,8 @@ const server = http.createServer(async (req, res) => {
           state: statePayload(conversationId),
         });
       } catch (err) {
+        // 哪怕在 spawn 之前就抛了，也不能让板子停在"正在跑"
+        setRunStatus(String(body.agent), 'error');
         sse.send('failed', { error: err.message });
       } finally {
         sse.end();

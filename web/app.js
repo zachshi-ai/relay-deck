@@ -146,7 +146,13 @@ function renderLed() {
         } ${pixel.agentId ?? ''} ${pixel.status ?? pixel.effect}"></span>`,
     )
     .join('');
-  els.ledBox.innerHTML = `<div class="led-dots">${dots}</div><div class="led-meta">${led.summary ?? ''}</div>`;
+  els.ledBox.innerHTML = `<div class="led-dots">${dots}</div><div class="led-meta">${led.summary ?? ''}</div>${
+    led.board
+      ? `<div class="led-board">板子会显示：<b>${led.board.stateName}</b> <span class="led-chip" style="background:rgb(${led.board.color.join(
+          ',',
+        )})"></span> <span class="hint">report 0x12 · seq ${led.board.sequence}</span></div>`
+      : ''
+  }`;
 }
 
 function renderConversations() {

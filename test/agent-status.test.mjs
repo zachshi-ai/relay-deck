@@ -14,6 +14,8 @@ import {
   sourceHash,
   sequenceIsNewer,
   buildAgentStatusFrame,
+  buildBoardStatus,
+  aggregateAgentStatus,
   AGENT_STATUS_COLORS,
 } from '../src/hardware/agent-status.mjs';
 
@@ -115,6 +117,41 @@ test('序号比较按 int32 回绕（与固件一致）', () => {
   // 回绕：0xFFFFFFFF 之后是 0
   assert.equal(sequenceIsNewer(0, 0xffffffff), true);
   assert.equal(sequenceIsNewer(0xffffffff, 0), false);
+});
+
+test('聚合：板子一次只显示一个状态，优先级必须是 在跑 > 失败 > 未读 > 等用户 > 空闲', () => {
+  assert.equal(aggregateAgentStatus({ runStatuses: ['running', 'error'] }), AGENT_STATUS_STATES.Running, '在跑优先');
+  assert.equal(aggregateAgentStatus({ runStatuses: ['idle', 'error', 'ok'] }), AGENT_STATUS_STATES.Failed, '失败优先于未读');
+  assert.equal(aggregateAgentStatus({ runStatuses: ['idle', 'ok'] }), AGENT_STATUS_STATES.CompletedUnread, '有未读结果 = 绿灯');
+  assert.equal(
+    aggregateAgentStatus({ runStatuses: ['idle', 'ok'], acknowledged: true }),
+    AGENT_STATUS_STATES.Idle,
+    '已读就熄灯',
+  );
+  assert.equal(aggregateAgentStatus({ runStatuses: ['waiting', 'idle'] }), AGENT_STATUS_STATES.WaitingUser);
+  assert.equal(aggregateAgentStatus({ runStatuses: ['idle', 'idle'] }), AGENT_STATUS_STATES.Idle);
+  assert.equal(aggregateAgentStatus({ runStatuses: {} }), AGENT_STATUS_STATES.Idle, '空集合也不许崩');
+  // 也接受 Record 形态（服务端就是 Map/对象）
+  assert.equal(aggregateAgentStatus({ runStatuses: { dsh: 'running', codex: 'idle' } }), AGENT_STATUS_STATES.Running);
+});
+
+test('板级聚合帧：reportId / 载荷 / 灯色 / 状态名齐全，Idle 时 TTL 归零', () => {
+  const running = buildBoardStatus({ runStatuses: ['running', 'idle'], conversationId: 'c-1', sequence: 3 });
+  assert.equal(running.reportId, 0x12);
+  assert.equal(running.stateName, 'Running');
+  assert.equal(running.payload.length, 16);
+  assert.deepEqual(running.color, AGENT_STATUS_COLORS[AGENT_STATUS_STATES.Running]);
+  assert.equal(decodeAgentStatus(Uint8Array.from(running.payload)).sequence, 3);
+
+  const idle = buildBoardStatus({ runStatuses: ['idle'], conversationId: 'c-1', sequence: 4 });
+  assert.equal(idle.stateName, 'Idle');
+  assert.equal(idle.ttlMs, 0, 'Idle 等于清状态，TTL 必须为 0');
+
+  // 同会话同来源，哈希稳定 → 固件才认得出是同一个来源
+  const again = buildBoardStatus({ runStatuses: ['idle'], conversationId: 'c-1', sequence: 4 });
+  assert.equal(again.sourceHash, idle.sourceHash);
+  const other = buildBoardStatus({ runStatuses: ['idle'], conversationId: 'c-2', sequence: 4 });
+  assert.notEqual(other.sourceHash, idle.sourceHash);
 });
 
 test('成帧函数给出可直接发送的 reportId / 载荷 / 灯色', () => {

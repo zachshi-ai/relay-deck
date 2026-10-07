@@ -38,7 +38,35 @@ byte 12..15 source_hash 小端 u32
 | `ok`（已读） | Idle | 熄灭 |
 | `waiting` | WaitingUser | 琥珀 `(30,12,0)` |
 
-**这部分主机侧已经实现并测好了**：`src/hardware/agent-status.mjs` + `test/agent-status.test.mjs`（编码/解码回环、小端字节序、TTL 上限夹紧、Idle 归零、非法输入拒绝、序号回绕比较）。
+### 两个必须说清的渲染语义（我第一版理解得太粗，这里纠正）
+
+读完 `led_strip_status.cpp` 之后确认：
+
+1. **板子一次只显示一个状态**：`set_agent_status()` 保存单个 `agent_status_`，后到的覆盖先到的。
+2. **它把这一种颜色铺成 5 颗灯的径向渐变**：`render_agent_status()` 里，中心灯满亮、相邻灯 50%、其余 25%。**不是"每个 Agent 一颗灯"**。
+3. **完全相同的帧会被丢弃**（state/flags/sequence/ttl/source 全同），所以 sequence 只在状态变化时才需要递增。
+4. `source_hash` 只参与去重与日志，**不参与选灯**。
+
+因此中台侧必须先把各 Agent 的状态**收敛成一件最该被看到的事**（`buildBoardStatus`）：
+
+```
+优先级：在跑 > 失败 > 有结果未读 > 在等用户 > 空闲
+```
+
+界面左下角那张"每个 Agent 一颗灯"的真值表（`led.mjs`）是**中台自己的可视化**，与板子显示的不是同一套编码——把两者混为一谈会让人以为板子能显示 5 个 Agent 的状态。要真做到那样，需要改固件（方案 b），当前不做。
+
+**这部分主机侧已经实现并测好了**：
+
+- `src/hardware/agent-status.mjs`：编码/解码、TTL 上限夹紧、Idle 归零、非法帧拒绝、序号回绕比较、**聚合优先级**
+- `test/agent-status.test.mjs`：10 项单测（共 78 项单测的一部分）
+- `scripts/e2e-board-status.mjs`：**13/13 通过**——在没有板子的情况下，把"中台状态 → 要发给板的 16 字节"整条链路验通：
+  - 基线 Idle 且 TTL 为 0
+  - **按下硬件键后，响应体里的那一帧就已经是 Running**（这里修过一个真问题：状态原本是异步才置上的，桥接层照那帧点灯会漏掉"正在跑"）
+  - Running 的 TTL = 600000，sequence 递增
+  - 轮次结束 → CompletedUnread（绿 `(0,24,5)`）
+  - 用户一动 → 回到 Idle（灯灭）
+  - 状态没变时重复读取不刷 sequence
+
 
 ## 二、还差的就是"怎么把 16 字节发出去"
 
