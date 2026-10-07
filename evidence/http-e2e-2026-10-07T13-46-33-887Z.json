@@ -1,0 +1,85 @@
+{
+  "kind": "relaydeck-http-e2e",
+  "ranAt": "2026-10-07T13:46:33.887Z",
+  "base": "http://127.0.0.1:8787",
+  "conversationId": "c-11f299a2",
+  "checks": [
+    {
+      "name": "第 1 轮 dsh 成功产出",
+      "passed": true,
+      "detail": "text=\"已记住 42。\""
+    },
+    {
+      "name": "第 1 轮回答里含有 42",
+      "passed": true
+    },
+    {
+      "name": "第 2 轮 codex 成功产出",
+      "passed": true,
+      "detail": "text=\"42\""
+    },
+    {
+      "name": "codex 靠自己会话不可能知道的数字答对了（接力上下文生效）",
+      "passed": true
+    },
+    {
+      "name": "新会话里 dsh 有独立 session",
+      "passed": true,
+      "detail": "session-b5e237f0-5e77-4720-9fbe-579b667b7d5d"
+    },
+    {
+      "name": "与会话 c-default 的 dsh session 不同（上下文不串）",
+      "passed": true,
+      "detail": "A=session-b5e237f0-5e77-4720-9fbe-579b667b7d5d / default=session-730c454b-929c-491b-9918-c9d5534aeecd"
+    },
+    {
+      "name": "新会话消息只含本会话内容",
+      "passed": true
+    },
+    {
+      "name": "全文搜索能命中",
+      "passed": true,
+      "detail": "3 条命中"
+    },
+    {
+      "name": "接力链可从 B 的回答回溯到 A 的回答",
+      "passed": true,
+      "detail": "m-2bb8bfd5 → m-92533e53 → m-3957d0e7"
+    },
+    {
+      "name": "用量汇总记录了 token 或耗时",
+      "passed": true,
+      "detail": "[\"dsh\",\"codex\"]"
+    }
+  ],
+  "turn1": {
+    "ok": true,
+    "text": "已记住 42。",
+    "messageId": "m-92533e53",
+    "sessionId": "session-b5e237f0-5e77-4720-9fbe-579b667b7d5d",
+    "events": {
+      "turn": 8,
+      "done": 1
+    }
+  },
+  "turn2": {
+    "ok": true,
+    "text": "42",
+    "messageId": "m-3957d0e7",
+    "sessionId": "01a1169d-b55b-7240-80d4-710d7bf591c4",
+    "relayOf": "m-92533e53",
+    "events": {
+      "turn": 6,
+      "done": 1
+    }
+  },
+  "lineage": [
+    "m-2bb8bfd5",
+    "m-92533e53",
+    "m-3957d0e7"
+  ],
+  "sessions": {
+    "newConversation": "session-b5e237f0-5e77-4720-9fbe-579b667b7d5d",
+    "defaultConversation": "session-730c454b-929c-491b-9918-c9d5534aeecd"
+  }
+}

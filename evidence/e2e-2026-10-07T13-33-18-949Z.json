@@ -1,0 +1,45 @@
+{
+  "kind": "relay-e2e",
+  "ranAt": "2026-10-07T13:33:18.951Z",
+  "node": "v24.18.0",
+  "platform": "darwin arm64",
+  "secretNumber": "42",
+  "results": [
+    {
+      "agent": "dsh",
+      "ok": true,
+      "recalled": true,
+      "sessionId": "session-13de3f38-ffd5-4446-8eb3-3d22453f60d0",
+      "steps": [
+        {
+          "step": "turn1",
+          "ok": true,
+          "sessionId": "session-13de3f38-ffd5-4446-8eb3-3d22453f60d0",
+          "text": "收到",
+          "error": null
+        },
+        {
+          "step": "turn2",
+          "ok": true,
+          "sessionId": "session-13de3f38-ffd5-4446-8eb3-3d22453f60d0",
+          "text": "42",
+          "error": null
+        }
+      ]
+    },
+    {
+      "agent": "codex",
+      "ok": false,
+      "reason": "第一轮未产出可用会话",
+      "steps": [
+        {
+          "step": "turn1",
+          "ok": false,
+          "sessionId": "01a11691-509a-71d0-8d00-0d6c7838dd36",
+          "text": "收到",
+          "error": "Under-development features enabled: chronicle. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /Users/zach/.codex/config.toml."
+        }
+      ]
+    }
+  ]
+}

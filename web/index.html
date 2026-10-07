@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RelayDeck 接力台</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">⇄</span>
+        <div>
+          <h1>RelayDeck 接力台</h1>
+          <p class="sub">多 Agent 中台 · 会话隔离 · 焦点句接力 · 圆桌汇总裁决</p>
+        </div>
+      </div>
+      <div class="topstatus">
+        <span id="conn" class="pill pill-idle">连接中…</span>
+        <span class="pill" id="focusPill">焦点：无</span>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel agents">
+        <div class="panel-head">
+          <h2>会话</h2>
+          <button id="newConvBtn" class="ghost tiny">＋ 新建</button>
+        </div>
+        <div id="convList" class="conv-list"></div>
+
+        <div class="panel-head">
+          <h2>Agent</h2>
+          <span class="hint">1–5 = 接力给第 N 个</span>
+        </div>
+        <div id="agentList" class="agent-list"></div>
+
+        <div class="panel-head"><h2>用量</h2><span class="hint">本会话累计</span></div>
+        <div id="usageBox" class="usage"></div>
+
+        <div class="panel-head"><h2>硬件</h2><span class="hint">LED 真值表</span></div>
+        <div id="ledBox" class="ledbox"></div>
+
+        <div class="panel-foot">
+          <button id="cancelBtn" class="ghost">终止当前所有轮次</button>
+        </div>
+      </section>
+
+      <section class="panel stream">
+        <div class="panel-head">
+          <h2 id="streamTitle">消息流</h2>
+          <span class="hint">↑/↓ 或 j/k 移焦点 · c 复制 · b 拉群 · / 搜索</span>
+        </div>
+
+        <div class="searchbar">
+          <input id="searchInput" placeholder="搜索消息（/ 聚焦 · Enter 跳下一个命中）" />
+          <span id="searchInfo" class="hint">未搜索</span>
+        </div>
+
+        <div class="composer">
+          <textarea id="composer" rows="2" placeholder="输入要问的话；Enter 发送给当前查看的 Agent，Shift+Enter 换行"></textarea>
+          <div class="composer-actions">
+            <button id="sendBtn">发送给当前 Agent</button>
+            <button id="relayBtn" class="ghost">接力给第 N 个（按键 1–5）</button>
+          </div>
+        </div>
+
+        <div id="live" class="live hidden">
+          <div class="live-head">
+            <span class="dot dot-running"></span><strong id="liveTitle">正在回答</strong>
+            <button id="liveClose" class="ghost tiny">收起</button>
+          </div>
+          <pre id="liveText"></pre>
+        </div>
+
+        <div id="messages" class="messages"></div>
+      </section>
+
+      <section class="panel roundtable">
+        <div class="panel-head">
+          <h2>圆桌裁决</h2>
+          <span class="hint">同一上下文快照并行广播</span>
+        </div>
+        <textarea id="rtQuestion" rows="3" placeholder="要让所有 Agent 一起讨论的问题（会带上当前焦点句作为引用上下文）"></textarea>
+        <div class="rt-row">
+          <label>主持人
+            <select id="rtChair"></select>
+          </label>
+          <label>并发
+            <input id="rtConcurrency" type="number" min="1" max="8" value="3" />
+          </label>
+        </div>
+        <div id="rtAgents" class="rt-agents"></div>
+        <button id="rtRun">拉群并汇总</button>
+        <div id="rtResult" class="rt-result"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="footerHint">硬件：S1–S5 接力 · 旋钮转 = 移动焦点 · 旋钮按 = 切查看 · S7 复制 · S8 拉群（阶段 2 接入）</span>
+    </footer>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

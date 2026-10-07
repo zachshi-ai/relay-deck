@@ -1,0 +1,31 @@
+{
+  "kind": "relay-e2e",
+  "ranAt": "2026-10-07T13:34:08.620Z",
+  "node": "v24.18.0",
+  "platform": "darwin arm64",
+  "secretNumber": "42",
+  "results": [
+    {
+      "agent": "codex",
+      "ok": false,
+      "recalled": false,
+      "sessionId": "01a11692-2123-76c2-85aa-19da2c328b87",
+      "steps": [
+        {
+          "step": "turn1",
+          "ok": true,
+          "sessionId": "01a11692-2123-76c2-85aa-19da2c328b87",
+          "text": "收到",
+          "error": null
+        },
+        {
+          "step": "turn2",
+          "ok": false,
+          "sessionId": "01a11692-2123-76c2-85aa-19da2c328b87",
+          "text": "",
+          "error": "error: unexpected argument '--sandbox' found\n\n  tip: to pass '--sandbox' as a value, use '-- --sandbox'\n\nUsage: codex exec resume --json --skip-git-repo-check <SESSION_ID> [PROMPT]\n\nFor more information, try '--help'."
+        }
+      ]
+    }
+  ]
+}

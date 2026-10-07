@@ -1,0 +1,8 @@
+data/
+node_modules/
+*.log
+.DS_Store
+
+# 编译产物：源码在 tools/hotkeyd.swift，用 swiftc 现场编译
+tools/hotkeyd
+tools/hotkeyd.dSYM/

@@ -1,0 +1,98 @@
+{
+  "kind": "relaydeck-http-e2e",
+  "ranAt": "2026-10-07T13:55:20.177Z",
+  "base": "http://127.0.0.1:8787",
+  "sourceAgent": "dsh",
+  "targetAgent": "minimax",
+  "conversationId": "c-dba9a9a2",
+  "checks": [
+    {
+      "name": "第 1 轮 dsh 成功产出",
+      "passed": true,
+      "detail": "text=\"已记住 42。\""
+    },
+    {
+      "name": "第 1 轮回答里含有 42",
+      "passed": true
+    },
+    {
+      "name": "第 2 轮 minimax 成功产出",
+      "passed": true,
+      "detail": "text=\"42\""
+    },
+    {
+      "name": "minimax 靠自己会话不可能知道的数字答对了（接力上下文生效）",
+      "passed": true
+    },
+    {
+      "name": "第 3 轮 minimax 靠中台补的历史答对（无续跑能力时的兜底）",
+      "passed": true,
+      "detail": "text=\"42\""
+    },
+    {
+      "name": "新会话里 dsh 有独立 session",
+      "passed": true,
+      "detail": "session-51b1c4b4-9bb5-4cba-b8de-47dd3c3f0de7"
+    },
+    {
+      "name": "与会话 c-default 的 dsh session 不同（上下文不串）",
+      "passed": true,
+      "detail": "A=session-51b1c4b4-9bb5-4cba-b8de-47dd3c3f0de7 / default=session-730c454b-929c-491b-9918-c9d5534aeecd"
+    },
+    {
+      "name": "新会话消息只含本会话内容",
+      "passed": true
+    },
+    {
+      "name": "全文搜索能命中",
+      "passed": true,
+      "detail": "4 条命中"
+    },
+    {
+      "name": "接力链可从 B 的回答回溯到 A 的回答",
+      "passed": true,
+      "detail": "m-204ff756 → m-db55e255 → m-81ff4cde"
+    },
+    {
+      "name": "用量汇总记录了 token 或耗时",
+      "passed": true,
+      "detail": "[\"dsh\",\"minimax\"]"
+    }
+  ],
+  "turn1": {
+    "ok": true,
+    "text": "已记住 42。",
+    "messageId": "m-db55e255",
+    "sessionId": "session-51b1c4b4-9bb5-4cba-b8de-47dd3c3f0de7",
+    "events": {
+      "turn": 8,
+      "done": 1
+    }
+  },
+  "turn2": {
+    "ok": true,
+    "text": "42",
+    "messageId": "m-81ff4cde",
+    "sessionId": null,
+    "relayOf": "m-db55e255",
+    "events": {
+      "turn": 4,
+      "done": 1
+    }
+  },
+  "turn3": {
+    "note": "无续跑能力的 Agent 的历史兜底轮",
+    "ok": true,
+    "text": "42",
+    "messageId": "m-d96ece5e"
+  },
+  "lineage": [
+    "m-204ff756",
+    "m-db55e255",
+    "m-81ff4cde"
+  ],
+  "sessions": {
+    "newConversation": "session-51b1c4b4-9bb5-4cba-b8de-47dd3c3f0de7",
+    "defaultConversation": "session-730c454b-929c-491b-9918-c9d5534aeecd"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "kind": "relay-e2e",
+  "ranAt": "2026-10-07T13:35:10.059Z",
+  "node": "v24.18.0",
+  "platform": "darwin arm64",
+  "secretNumber": "42",
+  "results": [
+    {
+      "agent": "codex",
+      "ok": true,
+      "recalled": true,
+      "sessionId": "01a11692-e79a-73e1-b957-4aceecf3f7a8",
+      "steps": [
+        {
+          "step": "turn1",
+          "ok": true,
+          "sessionId": "01a11692-e79a-73e1-b957-4aceecf3f7a8",
+          "text": "收到",
+          "error": null
+        },
+        {
+          "step": "turn2",
+          "ok": true,
+          "sessionId": "01a11692-e79a-73e1-b957-4aceecf3f7a8",
+          "text": "42",
+          "error": null
+        }
+      ]
+    }
+  ]
+}

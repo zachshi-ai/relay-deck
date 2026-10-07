@@ -1,0 +1,66 @@
+{
+  "kind": "relaydeck-boundary-e2e",
+  "ranAt": "2026-10-07T13:59:33.044Z",
+  "base": "http://127.0.0.1:8787",
+  "checks": [
+    {
+      "name": "焦点指向不存在的消息 → 404 且不写入状态",
+      "passed": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "没有焦点句时按 S7 → 明确拒绝（accepted:false）",
+      "passed": true,
+      "detail": "没有焦点句可复制"
+    },
+    {
+      "name": "未绑定的按键 → 不执行、不报 500",
+      "passed": true,
+      "detail": "未绑定的硬件输入"
+    },
+    {
+      "name": "未绑定的手势 → 不执行、不报 500",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "缺少 prompt → 400",
+      "passed": true,
+      "detail": "缺少 prompt"
+    },
+    {
+      "name": "未知 Agent → SSE 报 failed 且带上可用列表",
+      "passed": true,
+      "detail": "未知 Agent：gpt-9（已注册：dsh, codex, minimax, kimi）"
+    },
+    {
+      "name": "查询不存在的会话 → 200 且不崩（返回空消息）",
+      "passed": true,
+      "detail": "messages=0"
+    },
+    {
+      "name": "二进制不存在 → 非 0 退出，且错误信息说明\"无法启动\"",
+      "passed": false,
+      "detail": ""
+    },
+    {
+      "name": "超时 → 进程被终止且如实标记超时（不是静默成功）",
+      "passed": true,
+      "detail": "[relay] agent=dsh ok=false session=session-0b383384-2efe-47b7-ad4d-056034275c75 elapsed=1251ms exit=0 error=超时（1200ms）后已终止"
+    },
+    {
+      "name": "同一 Agent 并发两轮都成功（runner.lock 不冲突 = 队列生效）",
+      "passed": true,
+      "detail": "1=\"一\" / 2=\"二\""
+    }
+  ],
+  "spawnFailure": null,
+  "timeoutRun": {
+    "code": 1,
+    "stderr": "  session  session-0b383384-2efe-47b7-ad4d-056034275c75\n  status   turn_start\n  status   step_start\n  final    \n[relay] agent=dsh ok=false session=session-0b383384-2efe-47b7-ad4d-056034275c75 elapsed=1251ms exit=0 error=超时（1200ms）后已终止\n"
+  },
+  "concurrency": {
+    "first": "一",
+    "second": "二"
+  }
+}

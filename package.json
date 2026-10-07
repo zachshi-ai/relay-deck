@@ -1,0 +1,16 @@
+{
+  "name": "relay-deck",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "RelayDeck 接力台：多 Agent 中台 + EasyInput 硬件控制面",
+  "scripts": {
+    "test": "node --test",
+    "e2e": "node scripts/e2e-relay.mjs",
+    "agents": "node bin/relay.mjs agents",
+    "ask": "node bin/relay.mjs ask"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
