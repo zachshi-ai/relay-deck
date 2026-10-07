@@ -105,6 +105,19 @@ for (const [source, binary] of pairs) {
   if (s.mtimeMs > b.mtimeMs) fail(`${source} 比 ${binary} 新，忘了重新编译`);
 }
 
+// —— 7. 网页版别是过期产物（发布出去就丢人了）——
+const sourceDoc = path.join(ROOT, '交付', '1-作业正文.md');
+const publishHtml = path.join(ROOT, '交付', '5-作业正文-网页版.html');
+if (existsSync(publishHtml) && existsSync(sourceDoc)) {
+  const { stat } = await import('node:fs/promises');
+  const [src, html] = await Promise.all([stat(sourceDoc), stat(publishHtml)]);
+  if (src.mtimeMs > html.mtimeMs) {
+    fail('交付/5-作业正文-网页版.html 比作业正文旧，忘了重新生成（node scripts/build-publish-html.mjs）');
+  } else {
+    note('网页版与作业正文同步');
+  }
+}
+
 // —— 输出 ——
 console.log('=== 交付物一致性校验 ===');
 if (actualTests !== null) console.log(`真实单测数：${actualTests}`);
