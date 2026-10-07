@@ -147,6 +147,27 @@ if (!pending || agent_status_sequence_is_newer(usb_command.sequence, selected.se
 现象就是"灯不跟着中台走"。已在主机侧实现：`epochSequence()` 从当前时间秒数起算，
 而不是从 0 起算；单测锁住了"纪元序号必须胜过从 0 起算的序号"。
 
+### 中台 → 板子 回路已跑通 ✅
+
+```bash
+RELAYDECK_HID_BRIDGE=1 node server.mjs   # 状态一变就自动写 0x12
+```
+
+实测服务日志（按一下硬件 S3 触发一次真实接力）：
+
+```
+[14:26:43] led 板级状态 → Idle（seq=717641371）
+[14:26:43] bridge → idle seq=717641371
+[14:26:43] hardware key S3 → 接力给第 3 个 Agent ok
+[14:26:43] led 板级状态 → Running（seq=717641372）
+[14:26:43] bridge → running seq=717641372
+[14:26:46] hardware relay→minimax ok=true
+（随后 CompletedUnread，绿灯）
+```
+
+`SetReport` 全部返回 `0x00000000`，说明主机侧这条通路是通的。
+`src/hardware/bridge.mjs` 负责调工具，纯逻辑部分有 5 项单测（工具缺失自动禁用、参数正确、重复帧不重发、异常被吞掉）。
+
 ### 仍然只能肉眼确认的部分 ❓
 
 灯到底亮没亮——主机侧**没有任何可读回的通路**（GET_REPORT 未实现、没有串口日志）。

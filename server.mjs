@@ -26,7 +26,8 @@ import { runTurnWithRecovery } from './src/core/session-recovery.mjs';
 import { exportChainMarkdown } from './src/core/export.mjs';
 import { resolveHardwareEvent, resolveHidCombo, describeCommand } from './src/hardware/keymap.mjs';
 import { computeLedState, toWs2812Frame, frameToHex, describeLedState } from './src/hardware/led.mjs';
-import { buildBoardStatus, aggregateAgentStatus, AGENT_STATUS_NAMES } from './src/hardware/agent-status.mjs';
+import { buildBoardStatus, aggregateAgentStatus, AGENT_STATUS_NAMES, epochSequence } from './src/hardware/agent-status.mjs';
+import { createBoardBridge } from './src/hardware/bridge.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(HERE, 'web');
@@ -100,6 +101,14 @@ let boardStatusSequence = epochSequence();
 let boardStatusState = null;
 let boardAcknowledged = true;
 
+// 中台 → 实板 的桥：RELAYDECK_HID_BRIDGE=1 时启用（默认关闭，
+// 免得没板子的机器上每次状态变化都去 spawn 一个不存在的工具）
+const boardBridge = createBoardBridge({
+  toolPath: process.env.RELAYDECK_HID_TOOL ?? path.join(HERE, 'tools', 'hidtool'),
+  enabled: process.env.RELAYDECK_HID_BRIDGE === '1',
+  log,
+});
+
 function setRunStatus(agentId, status) {
   runStatus.set(agentId, status);
 }
@@ -125,9 +134,11 @@ function ledSnapshot() {
   // sequence 只在状态变化时递增（固件会丢弃完全相同的帧，重复发送等于刷新 TTL）。
   const runStatuses = ADAPTERS.map((a) => runStatus.get(a.id) ?? 'idle');
   const boardState = aggregateAgentStatus({ runStatuses, acknowledged: boardAcknowledged });
+  let changed = false;
   if (boardState !== boardStatusState) {
     boardStatusState = boardState;
     boardStatusSequence += 1;
+    changed = true;
     log('led', `板级状态 → ${AGENT_STATUS_NAMES[boardState]}（seq=${boardStatusSequence}）`);
   }
   const board = buildBoardStatus({
@@ -136,6 +147,8 @@ function ledSnapshot() {
     conversationId: activeConversationId,
     sequence: boardStatusSequence,
   });
+  // 真的把帧写到板子上（仅在 --bridge 打开且有板子时）
+  if (changed && boardBridge.enabled) boardBridge.push(board);
 
   return {
     ...state,
@@ -211,6 +224,7 @@ function statePayload(conversationId = null) {
     chair: DEFAULT_CHAIR,
     viewIndex,
     runs: activeRunList(),
+    bridge: { enabled: boardBridge.enabled, reason: boardBridge.reason },
     led: ledSnapshot(),
     ...snapshot,
   };
