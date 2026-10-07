@@ -3,6 +3,10 @@
 多 Agent 中台 + EasyInput 硬件控制面。**8 键 + 1 旋钮**完成切人、接力、定位、复制、拉群——手不离键盘。
 
 > 第 8 课毕业大作业项目。设计取舍见 [charter.md](charter.md)，推进计划见 [plan.md](plan.md)，适配器契约见 [docs/adapter-contract.md](docs/adapter-contract.md)，四个 Agent 的接法见 [docs/agent-onboarding.md](docs/agent-onboarding.md)。
+>
+> **提交用交付包**：[作业正文](交付/1-作业正文.md) · [证据清单](交付/2-证据清单.md) · [复现手册](交付/3-复现手册.md)
+>
+> 唯一未完成的硬指标：**作品的可公开访问链接**（把作业正文上传成飞书文档后，把链接填回作业正文开头）。
 
 ## 当前状态
 
