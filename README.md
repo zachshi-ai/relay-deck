@@ -144,6 +144,7 @@ node scripts/e2e-cancel.mjs              # 单条精确取消（不影响并发�
 node scripts/e2e-provider-failure.mjs    # 弱网/上游失败矩阵（自起中台+假 provider，不碰设备）
 node scripts/check-hardware.mjs          # 硬件就绪自检：什么已就绪、什么需要你操作
 node scripts/check-delivery.mjs          # 交付物一致性：测试数/证据引用/脚本名/链接/编译产物
+node scripts/check-fresh-clone.mjs       # 干净副本复现：git archive 导出后从头跑一遍验收
 ```
 
 单测 fixture 全部来自**真实抓取**的输出，不是编造的。
