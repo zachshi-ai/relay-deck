@@ -1,0 +1,92 @@
+{
+  "kind": "relaydeck-cancel-e2e",
+  "ranAt": "2026-10-07T14:17:14.073Z",
+  "base": "http://127.0.0.1:8787",
+  "conversationId": "c-cda02631",
+  "checks": [
+    {
+      "name": "能看到正在跑的轮次（runs 列表里有 runId）",
+      "passed": true,
+      "detail": "run-1"
+    },
+    {
+      "name": "按 agent 精确取消命中 1 条",
+      "passed": true,
+      "detail": "killed=1 [{\"runId\":\"run-1\",\"agentId\":\"kimi\"}]"
+    },
+    {
+      "name": "被取消的那轮如实标记 cancelled",
+      "passed": true,
+      "detail": "cancelled=true error=已取消"
+    },
+    {
+      "name": "错误信息是\"已取消\"，不是伪装成模型失败",
+      "passed": true,
+      "detail": "已取消"
+    },
+    {
+      "name": "被取消的那轮没有产出正式回答",
+      "passed": true,
+      "detail": "ok=false text=\"\""
+    },
+    {
+      "name": "同时进行的另一轮不受影响",
+      "passed": true,
+      "detail": "ok=true text=\"收到\""
+    },
+    {
+      "name": "取消没有造成重复调用（用户的指令只入库一次，没有自愈重试的第二轮）",
+      "passed": true,
+      "detail": "kimi 的 user 消息数=1"
+    },
+    {
+      "name": "取消后 runs 列表里不再有 kimi",
+      "passed": true,
+      "detail": "[]"
+    },
+    {
+      "name": "取消后该 Agent 的状态回到 idle（不是 error）",
+      "passed": true,
+      "detail": "runStatus=idle"
+    },
+    {
+      "name": "不带参数仍可\"终止全部\"（向后兼容）",
+      "passed": true,
+      "detail": "killed=0"
+    }
+  ],
+  "victim": {
+    "cancelled": true,
+    "error": "已取消",
+    "ok": false,
+    "runId": "run-1"
+  },
+  "bystander": {
+    "ok": true,
+    "text": "收到",
+    "cancelled": false
+  },
+  "cancelResponse": {
+    "killed": 1,
+    "cancelled": [
+      {
+        "runId": "run-1",
+        "agentId": "kimi"
+      }
+    ],
+    "runs": [
+      {
+        "runId": "run-1",
+        "agentId": "kimi",
+        "conversationId": "c-cda02631",
+        "elapsedMs": 304
+      },
+      {
+        "runId": "run-2",
+        "agentId": "minimax",
+        "conversationId": "c-cda02631",
+        "elapsedMs": 300
+      }
+    ]
+  }
+}

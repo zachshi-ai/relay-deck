@@ -41,8 +41,52 @@ const MIME = {
 };
 
 const store = await new Store().load();
-const activeChildren = new Set();
 const agentQueue = createAgentQueue();
+
+// 运行注册表：每一轮都有 runId + AbortController，支持"单条精确取消"；
+// 之前只能"终止全部"，一个慢轮次会把整台中台拖住。
+const activeRuns = new Map(); // runId → { runId, agentId, conversationId, startedAt, controller, child }
+let runCounter = 0;
+
+function registerRun({ agentId, conversationId }) {
+  const runId = `run-${(runCounter += 1)}`;
+  const entry = {
+    runId,
+    agentId,
+    conversationId,
+    startedAt: Date.now(),
+    controller: new AbortController(),
+    child: null,
+  };
+  activeRuns.set(runId, entry);
+  return entry;
+}
+
+function finishRun(runId) {
+  activeRuns.delete(runId);
+}
+
+/** 取消：给 runId 就精确取消；给 agent 就取消该 Agent 当前那一轮；都不给则全部 */
+function cancelRuns({ runId = null, agent = null, all = false } = {}) {
+  const killed = [];
+  for (const entry of activeRuns.values()) {
+    const matches = all || (runId && entry.runId === runId) || (agent && entry.agentId === agent);
+    if (!matches) continue;
+    entry.controller.abort();
+    killed.push({ runId: entry.runId, agentId: entry.agentId });
+  }
+  return killed;
+}
+
+function activeRunList() {
+  return [...activeRuns.values()].map((entry) => ({
+    runId: entry.runId,
+    agentId: entry.agentId,
+    conversationId: entry.conversationId,
+    elapsedMs: Date.now() - entry.startedAt,
+  }));
+}
+
 let focusMessageId = null;
 // 硬件侧状态：谁在跑、当前在看第几个 Agent、当前会话
 const runStatus = new Map(); // agentId → 'idle' | 'running' | 'ok' | 'error'
@@ -163,6 +207,7 @@ function statePayload(conversationId = null) {
     focusMessageId,
     chair: DEFAULT_CHAIR,
     viewIndex,
+    runs: activeRunList(),
     led: ledSnapshot(),
     ...snapshot,
   };
@@ -216,25 +261,37 @@ async function askOnce({
 
   const started = Date.now();
   const existingSession = store.getAgentSession(conversationId, agentId);
-  // 同一个 Agent 串行（kimi 的 runner.lock 拒绝并发；连按两下也不该起两个进程）；
-  // 续跑线失效时自动丢掉旧线重跑一次，避免整个会话被一条坏 session 永久卡死。
-  const recovery = await runTurnWithRecovery({
-    sessionId: existingSession,
-    runOnce: ({ sessionId }) =>
-      agentQueue.run(agentId, () =>
-        runTurn({
-          adapter,
-          prompt: effectivePrompt,
-          sessionId,
-          timeoutMs: TURN_TIMEOUT_MS,
-          onEvent,
-          onChild,
-        }),
-      ),
-  });
+  // 每一轮登记一个 runId + AbortController，这样"取消"能精确到某一条轮次
+  const run = registerRun({ agentId, conversationId });
+  let recovery;
+  try {
+    // 同一个 Agent 串行（kimi 的 runner.lock 拒绝并发；连按两下也不该起两个进程）；
+    // 续跑线失效时自动丢掉旧线重跑一次，避免整个会话被一条坏 session 永久卡死。
+    recovery = await runTurnWithRecovery({
+      sessionId: existingSession,
+      runOnce: ({ sessionId }) =>
+        agentQueue.run(agentId, () =>
+          runTurn({
+            adapter,
+            prompt: effectivePrompt,
+            sessionId,
+            timeoutMs: TURN_TIMEOUT_MS,
+            signal: run.controller.signal,
+            onEvent,
+            onChild: (child) => {
+              run.child = child;
+              onChild?.(child);
+            },
+          }),
+        ),
+    });
+  } finally {
+    finishRun(run.runId);
+  }
   const result = recovery.result;
-  // 硬件侧的 LED 靠这个状态点灯，成败都要如实落到灯上
-  setRunStatus(agentId, result.ok ? 'ok' : 'error');
+  // 硬件侧的 LED 靠这个状态点灯，成败都要如实落到灯上。
+  // 用户主动取消不算失败：灯回到空闲，而不是报红。
+  setRunStatus(agentId, result.cancelled ? 'idle' : result.ok ? 'ok' : 'error');
   // 有新结果但用户还没看：板子上应该亮"完成未读"（绿灯）
   if (result.ok) boardAcknowledged = false;
 
@@ -277,6 +334,8 @@ async function askOnce({
     contextReset: recovery.contextReset,
     previousSession: recovery.previousSession,
     attempts: recovery.attempts,
+    runId: run.runId,
+    cancelled: result.cancelled === true,
   };
 }
 
@@ -329,13 +388,13 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, statePayload(body.conversationId));
     }
 
+    // 精确取消：{ runId } 取消某一条；{ agent } 取消该 Agent 当前轮；都不给则全部取消
     if (route === 'POST /api/cancel') {
-      let killed = 0;
-      for (const child of activeChildren) {
-        child.kill('SIGTERM');
-        killed += 1;
-      }
-      return json(res, 200, { killed });
+      const body = await readBody(req).catch(() => ({}));
+      const all = body.all === true || (!body.runId && !body.agent);
+      const killed = cancelRuns({ runId: body.runId ?? null, agent: body.agent ?? null, all });
+      log('cancel', all ? 'all' : (body.runId ?? body.agent), `→ ${killed.length} 条`);
+      return json(res, 200, { killed: killed.length, cancelled: killed, runs: activeRunList() });
     }
 
     // 手工修过 data/store.jsonl 之后不必重启进程：重新从磁盘加载一次
@@ -389,10 +448,6 @@ const server = http.createServer(async (req, res) => {
             instruction,
             relayOf: focusMessageId,
             conversationId,
-            onChild: (child) => {
-              activeChildren.add(child);
-              child.on('close', () => activeChildren.delete(child));
-            },
           })
             .then((turn) => {
               log('hardware', `relay→${target}`, 'ok=' + turn.ok, 'chars=' + turn.text.length);
@@ -467,10 +522,6 @@ const server = http.createServer(async (req, res) => {
                 conversationId,
                 persistUser: false,
                 persistAgent: stage !== 'chair',
-                onChild: (child) => {
-                  activeChildren.add(child);
-                  child.on('close', () => activeChildren.delete(child));
-                },
               });
               return { agent: turn.agent, ok: turn.ok, text: turn.text, error: turn.error, sessionId: turn.sessionId };
             },
@@ -507,8 +558,6 @@ const server = http.createServer(async (req, res) => {
           onEvent: (event) => sse.send('turn', event),
           onChild: (child) => {
             childRef.child = child;
-            activeChildren.add(child);
-            child.on('close', () => activeChildren.delete(child));
           },
         });
         log('ask', result.agent, 'ok=' + result.ok, 'chars=' + result.text.length, 'ms=' + (result.agentMessage?.meta?.elapsedMs ?? '-'));
@@ -525,6 +574,8 @@ const server = http.createServer(async (req, res) => {
           relayOf: result.focus?.id ?? null,
           contextReset: result.contextReset,
           attempts: result.attempts,
+          runId: result.runId,
+          cancelled: result.cancelled,
           state: statePayload(conversationId),
         });
       } catch (err) {
@@ -578,10 +629,6 @@ const server = http.createServer(async (req, res) => {
               relayOf: null,
               conversationId,
               onEvent: (event) => sse.send('turn', event),
-              onChild: (child) => {
-                activeChildren.add(child);
-                child.on('close', () => activeChildren.delete(child));
-              },
               persistUser: false,
               // 主持人那一轮由外层显式存成 roundtable-summary；参与者轮照常入库。
               // 注意：chair 本身也可能在 fan-out 里，所以只能按 stage 区分，不能按身份。

@@ -12,7 +12,8 @@
 export async function runTurnWithRecovery({ sessionId = null, runOnce }) {
   const first = await runOnce({ sessionId, attempt: 1 });
 
-  const canRetry = Boolean(sessionId) && !first.ok && !first.timedOut;
+  // 用户主动取消不算"续跑线坏了"：重试等于无视用户的取消指令
+  const canRetry = Boolean(sessionId) && !first.ok && !first.timedOut && !first.cancelled;
   if (!canRetry) {
     return { result: first, contextReset: false, previousSession: null, attempts: 1 };
   }

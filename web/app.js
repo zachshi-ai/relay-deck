@@ -223,6 +223,23 @@ function renderAgents() {
       currentAgent = agent.id;
       render();
     };
+    if (isRunning) {
+      // 单条精确取消：只掐掉这个 Agent 当前那一轮，不影响别人
+      const cancel = document.createElement('button');
+      cancel.className = 'ghost tiny cancel-run';
+      cancel.textContent = '取消';
+      cancel.title = `取消 ${agent.label} 当前这一轮`;
+      cancel.onclick = async (event) => {
+        event.stopPropagation();
+        await fetch('/api/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent: agent.id }),
+        });
+        els.focusPill.textContent = `已请求取消 ${agent.id} 的当前轮次`;
+      };
+      card.appendChild(cancel);
+    }
     els.agentList.appendChild(card);
   });
 }

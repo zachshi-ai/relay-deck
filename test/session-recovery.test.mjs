@@ -69,6 +69,21 @@ test('超时不重试：不能让用户白等两倍时间', async () => {
   assert.equal(out.result.timedOut, true);
 });
 
+test('用户取消不重试：取消指令不能被"自愈"无视', async () => {
+  let calls = 0;
+  const out = await runTurnWithRecovery({
+    sessionId: 'session-good',
+    runOnce: async () => {
+      calls += 1;
+      return { ok: false, text: '', error: '已取消', cancelled: true };
+    },
+  });
+  assert.equal(out.contextReset, false);
+  assert.equal(calls, 1, '取消后绝不能再起一轮');
+  assert.equal(out.result.cancelled, true);
+  assert.equal(out.result.error, '已取消');
+});
+
 test('重跑仍然失败：不声称自愈，并保留第一次的错误用于诊断', async () => {
   const out = await runTurnWithRecovery({
     sessionId: 'session-dead',

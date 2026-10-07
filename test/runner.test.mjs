@@ -105,6 +105,42 @@ test('二进制不存在 → 判失败、给出"无法启动"，且不会挂住'
   assert.ok(Date.now() - started < 5000, 'spawn 失败必须立刻返回，不能等到超时');
 });
 
+test('取消：abort 后立刻终止子进程并标记 cancelled（与超时区分开）', async () => {
+  const adapter = fakeAdapter('setTimeout(() => {}, 60000)');
+  const controller = new AbortController();
+  const started = Date.now();
+  const pending = runTurn({
+    adapter,
+    prompt: 'hi',
+    timeoutMs: 60000,
+    killGraceMs: 200,
+    signal: controller.signal,
+  });
+  setTimeout(() => controller.abort(), 150);
+  const result = await pending;
+
+  assert.equal(result.ok, false);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.timedOut, false, '取消不能被记成超时');
+  assert.equal(result.error, '已取消');
+  assert.ok(Date.now() - started < 10000, '取消后必须很快返回');
+});
+
+test('取消先于执行：已经 abort 的信号不会把子进程跑完', async () => {
+  const adapter = fakeAdapter('setTimeout(() => { console.log("不该输出"); }, 30000)');
+  const controller = new AbortController();
+  controller.abort();
+  const result = await runTurn({
+    adapter,
+    prompt: 'hi',
+    timeoutMs: 30000,
+    killGraceMs: 200,
+    signal: controller.signal,
+  });
+  assert.equal(result.cancelled, true);
+  assert.equal(result.text, '');
+});
+
 test('超时会被强制终止，并如实标记 timedOut', async () => {
   const adapter = fakeAdapter('setTimeout(() => {}, 60000)');
   const started = Date.now();

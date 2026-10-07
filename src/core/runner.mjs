@@ -17,6 +17,8 @@ export async function runTurn({
   timeoutMs = 180000,
   killGraceMs = 5000,
   onEvent = () => {},
+  onChild = () => {},
+  signal = null,
   env = process.env,
 } = {}) {
   if (!adapter) throw new Error('runTurn 需要 adapter');
@@ -36,6 +38,7 @@ export async function runTurn({
     env: childEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
+  onChild(child);
 
   const events = [];
   const warnings = [];
@@ -46,6 +49,7 @@ export async function runTurn({
   let lastUsage = null;
   let stderr = '';
   let timedOut = false;
+  let cancelled = false;
   let spawnError = null;
   let graceTimer = null;
 
@@ -104,6 +108,20 @@ export async function runTurn({
   }, timeoutMs);
   timeoutTimer.unref?.();
 
+  // 取消：与超时走同一套"先 SIGTERM、宽限后 SIGKILL"，但标记不同——
+  // "用户取消"和"跑太久"是两件必须分清的事，否则日志会把它们混为一谈。
+  const onAbort = () => {
+    if (cancelled || child.exitCode !== null) return;
+    cancelled = true;
+    child.kill('SIGTERM');
+    graceTimer = setTimeout(() => child.kill('SIGKILL'), killGraceMs);
+    graceTimer.unref?.();
+  };
+  if (signal) {
+    if (signal.aborted) onAbort();
+    else signal.addEventListener('abort', onAbort, { once: true });
+  }
+
   // stdin 必须显式关闭：Codex 在有 stdin 时会继续等待输入。
   // prompt 走 argv 的适配器（kimi）不能往 stdin 写正文——那是它的控制命令通道。
   child.stdin.on('error', () => {});
@@ -125,6 +143,7 @@ export async function runTurn({
 
   clearTimeout(timeoutTimer);
   if (graceTimer) clearTimeout(graceTimer);
+  if (signal) signal.removeEventListener('abort', onAbort);
   rl?.close();
 
   // 进程根本没起来（二进制不存在等）时没有输出可解析，直接进入失败分支，
@@ -134,10 +153,11 @@ export async function runTurn({
   }
 
   const text = (finalText ?? streamedText).trim();
-  const ok = !timedOut && !spawnError && !errorMessage && text.length > 0;
+  const ok = !timedOut && !cancelled && !spawnError && !errorMessage && text.length > 0;
 
-  // 错误信息按"谁更接近根因"排序：启动失败 > 超时 > 适配器报错 > 无输出
-  if (spawnError) errorMessage = `无法启动 ${adapter.command()}：${spawnError.message}`;
+  // 错误信息按"谁更接近根因"排序：取消 > 启动失败 > 超时 > 适配器报错 > 无输出
+  if (cancelled) errorMessage = '已取消';
+  else if (spawnError) errorMessage = `无法启动 ${adapter.command()}：${spawnError.message}`;
   else if (timedOut) errorMessage = `超时（${timeoutMs}ms）后已终止`;
   else if (!errorMessage && !ok) errorMessage = stderr.trim() || '没有产出任何文本';
 
@@ -151,6 +171,7 @@ export async function runTurn({
     warnings,
     stderr: stderr.trim(),
     timedOut,
+    cancelled,
     exitCode,
     args,
     events,
