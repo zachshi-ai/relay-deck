@@ -589,9 +589,14 @@ async function runRoundtable() {
     await sse('/api/roundtable', { question, agents, chair, concurrency, relayOf: focusId, conversationId: state.conversationId }, {
       phase: (phase) => {
         if (phase.phase === 'fanout.answer') {
-          collected.set(phase.agent, { agent: phase.agent, ok: phase.ok });
+          collected.set(phase.agent, { agent: phase.agent, ok: phase.ok, timedOut: phase.timedOut });
           els.rtResult.innerHTML = [...collected.values()]
-            .map((a) => `<div class="rt-answer"><h4>${a.agent} ${a.ok ? '✓' : '✗'}</h4></div>`)
+            .map(
+              (a) =>
+                `<div class="rt-answer"><h4>${a.agent} ${a.ok ? '✓' : '✗'}${
+                  a.timedOut ? ' <span class="warn-badge">超时已跳过</span>' : ''
+                }</h4></div>`,
+            )
             .join('');
         }
         if (phase.phase === 'chair.start') els.rtResult.innerHTML += '<p class="hint">主持人正在汇总…</p>';
@@ -601,7 +606,9 @@ async function runRoundtable() {
         for (const answer of result.answers) {
           const div = document.createElement('div');
           div.className = 'rt-answer';
-          div.innerHTML = `<h4>${answer.agent} ${answer.ok ? '✓' : '✗ ' + (answer.error ?? '')}</h4><pre></pre>`;
+          div.innerHTML = `<h4>${answer.agent} ${answer.ok ? '✓' : `✗ ${answer.error ?? ''}`}${
+            answer.timedOut ? ' <span class="warn-badge">超时已跳过</span>' : ''
+          }</h4><pre></pre>`;
           div.querySelector('pre').textContent = answer.text || '（无输出）';
           els.rtResult.appendChild(div);
         }

@@ -35,7 +35,7 @@ try {
 }
 
 // —— 2. 各文档里声明的测试数必须等于真实值 ——
-const DOCS = ['README.md', '交付/1-作业正文.md', '交付/2-证据清单.md'];
+const DOCS = ['README.md', '交付/1-作业正文.md', '交付/2-证据清单.md', '交付/4-提交前自检.md'];
 for (const doc of DOCS) {
   const text = await readFile(path.join(ROOT, doc), 'utf8');
   const claims = new Set();
@@ -54,7 +54,7 @@ for (const doc of DOCS) {
 // —— 3. 文档里引用的证据文件必须存在 ——
 const evidenceFiles = new Set(await readdir(path.join(ROOT, 'evidence')));
 const referenced = new Set();
-for (const doc of [...DOCS, '交付/3-复现手册.md', 'docs/hardware-stage2b.md']) {
+for (const doc of [...DOCS, '交付/3-复现手册.md', 'docs/hardware-stage2b.md', 'docs/agent-onboarding.md']) {
   const text = await readFile(path.join(ROOT, doc), 'utf8');
   for (const match of text.matchAll(/evidence\/([A-Za-z0-9_.\-]+\.(?:json|sse|png))/g)) {
     referenced.add(match[1]);
@@ -70,7 +70,7 @@ note(`文档引用了 ${referenced.size} 个证据文件，evidence/ 目录现�
 
 // —— 4. 文档里提到的脚本必须存在 ——
 const scripts = new Set(await readdir(path.join(ROOT, 'scripts')));
-for (const doc of [...DOCS, '交付/3-复现手册.md', 'docs/hardware-stage2b.md']) {
+for (const doc of [...DOCS, '交付/3-复现手册.md', 'docs/hardware-stage2b.md', 'docs/agent-onboarding.md']) {
   const text = await readFile(path.join(ROOT, doc), 'utf8');
   for (const match of text.matchAll(/scripts\/([A-Za-z0-9_.\-]+\.mjs)/g)) {
     if (!scripts.has(match[1])) fail(`${doc} 提到了不存在的脚本：scripts/${match[1]}`);
@@ -78,7 +78,7 @@ for (const doc of [...DOCS, '交付/3-复现手册.md', 'docs/hardware-stage2b.m
 }
 
 // —— 5. 交付文档里的相对链接必须能解析 ——
-for (const doc of ['交付/1-作业正文.md', '交付/2-证据清单.md', '交付/3-复现手册.md']) {
+for (const doc of ['交付/1-作业正文.md', '交付/2-证据清单.md', '交付/3-复现手册.md', '交付/4-提交前自检.md']) {
   const text = await readFile(path.join(ROOT, doc), 'utf8');
   const dir = path.dirname(path.join(ROOT, doc));
   for (const match of text.matchAll(/\]\((\.\.?\/[^)\s]+)\)/g)) {

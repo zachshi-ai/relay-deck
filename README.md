@@ -4,7 +4,7 @@
 
 > 第 8 课毕业大作业项目。设计取舍见 [charter.md](charter.md)，推进计划见 [plan.md](plan.md)，适配器契约见 [docs/adapter-contract.md](docs/adapter-contract.md)，四个 Agent 的接法见 [docs/agent-onboarding.md](docs/agent-onboarding.md)，实板接入清单见 [docs/hardware-stage2b.md](docs/hardware-stage2b.md)。
 >
-> **提交用交付包**：[作业正文](交付/1-作业正文.md) · [证据清单](交付/2-证据清单.md) · [复现手册](交付/3-复现手册.md)
+> **提交用交付包**：[作业正文](交付/1-作业正文.md) · [证据清单](交付/2-证据清单.md) · [复现手册](交付/3-复现手册.md) · [提交前自检单](交付/4-提交前自检.md)
 >
 > 唯一未完成的硬指标：**作品的可公开访问链接**（把作业正文上传成飞书文档后，把链接填回作业正文开头）。
 
