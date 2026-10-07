@@ -10,6 +10,9 @@ const els = {
   conn: document.getElementById('conn'),
   focusPill: document.getElementById('focusPill'),
   convList: document.getElementById('convList'),
+  archivedBox: document.getElementById('archivedBox'),
+  archivedToggle: document.getElementById('archivedToggle'),
+  archivedList: document.getElementById('archivedList'),
   newConvBtn: document.getElementById('newConvBtn'),
   agentList: document.getElementById('agentList'),
   usageBox: document.getElementById('usageBox'),
@@ -169,7 +172,70 @@ function renderConversations() {
       event.stopPropagation();
       renameConversation(conversation);
     };
+    // 归档（软归档：数据不删，随时能恢复）
+    const actions = document.createElement('span');
+    actions.className = 'conv-actions';
+    const archive = document.createElement('button');
+    archive.className = 'ghost tiny';
+    archive.textContent = '归档';
+    archive.title = '从列表里挪走，数据保留、可恢复';
+    archive.onclick = (event) => {
+      event.stopPropagation();
+      setConversationArchived(conversation.id, true);
+    };
+    actions.appendChild(archive);
+    item.appendChild(actions);
     els.convList.appendChild(item);
+  }
+  renderArchived();
+}
+
+function renderArchived() {
+  const archived = state.archivedConversations ?? [];
+  els.archivedBox.classList.toggle('hidden', archived.length === 0);
+  if (!archived.length) {
+    els.archivedList.innerHTML = '';
+    return;
+  }
+  const open = els.archivedBox.dataset.open === '1';
+  els.archivedToggle.textContent = `${open ? '▾' : '▸'} 已归档（${archived.length}）`;
+  els.archivedList.innerHTML = '';
+  if (!open) return;
+  for (const conversation of archived) {
+    const item = document.createElement('div');
+    item.className = 'conv-item';
+    item.innerHTML = `<span class="conv-title"></span><span class="conv-meta">${conversation.messageCount} 条</span>`;
+    item.querySelector('.conv-title').textContent = conversation.title;
+    const actions = document.createElement('span');
+    actions.className = 'conv-actions';
+    const restore = document.createElement('button');
+    restore.className = 'ghost tiny';
+    restore.textContent = '恢复';
+    restore.onclick = (event) => {
+      event.stopPropagation();
+      setConversationArchived(conversation.id, false);
+    };
+    actions.appendChild(restore);
+    item.appendChild(actions);
+    item.onclick = () => switchConversation(conversation.id);
+    els.archivedList.appendChild(item);
+  }
+}
+
+async function setConversationArchived(id, archived) {
+  const res = await fetch('/api/conversations', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, archived }),
+  });
+  const data = await res.json();
+  if (data.state) {
+    // 归档掉当前会话时，服务端会给出下一个可用会话
+    if (data.state.conversationId !== state.conversationId) {
+      await switchConversation(data.state.conversationId);
+    } else {
+      await loadState();
+    }
   }
 }
 
@@ -556,6 +622,10 @@ async function runRoundtable() {
 }
 
 // —— 事件绑定 ——
+els.archivedToggle.onclick = () => {
+  els.archivedBox.dataset.open = els.archivedBox.dataset.open === '1' ? '0' : '1';
+  renderArchived();
+};
 els.newConvBtn.onclick = newConversation;
 els.sendBtn.onclick = () => {
   const prompt = els.composer.value.trim();

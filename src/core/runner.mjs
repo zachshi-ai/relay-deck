@@ -87,7 +87,14 @@ export async function runTurn({
   } else {
     rl = createInterface({ input: child.stdout });
     rl.on('line', (line) => {
-      for (const event of adapter.parseLine(line)) emit(event);
+      // 适配器解析抛异常不能把中台带崩：事件回调里抛出会变成未捕获异常。
+      // 单行解析失败只记一条警告，继续处理后面的行（上游输出偶尔会夹带残缺行）。
+      try {
+        for (const event of adapter.parseLine(line)) emit(event);
+      } catch (err) {
+        emit({ type: 'raw', raw: line, parseError: err.message });
+        emit({ type: 'error', message: `适配器解析失败（已跳过该行）：${err.message}`, fatal: false });
+      }
     });
   }
 
@@ -149,7 +156,16 @@ export async function runTurn({
   // 进程根本没起来（二进制不存在等）时没有输出可解析，直接进入失败分支，
   // 否则适配器的"空输出"错误会把真正的启动错误盖掉。
   if (wholeOutput && !spawnError) {
-    for (const event of adapter.parseOutput(stdoutBuffer)) emit(event);
+    // 整体解析同样要防：适配器自己的 bug 不能变成中台的崩溃
+    try {
+      for (const event of adapter.parseOutput(stdoutBuffer)) emit(event);
+    } catch (err) {
+      emit({
+        type: 'error',
+        message: `适配器整体解析失败：${err.message}（可能是上游输出被截断）`,
+        fatal: true,
+      });
+    }
   }
 
   const text = (finalText ?? streamedText).trim();

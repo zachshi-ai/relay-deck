@@ -405,11 +405,24 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { conversation, state: statePayload(conversation.id) });
     }
 
+    // 改名或归档（软归档，不删数据）
     if (route === 'PATCH /api/conversations') {
       const body = await readBody(req);
-      const conversation = await store.renameConversation(String(body.id ?? ''), body.title);
+      const id = String(body.id ?? '');
+      const conversation =
+        typeof body.archived === 'boolean'
+          ? await store.setConversationArchived(id, body.archived)
+          : await store.renameConversation(id, body.title);
       if (!conversation) return json(res, 404, { error: '找不到会话' });
-      return json(res, 200, { conversation, state: statePayload(conversation.id) });
+
+      // 归档掉的正是当前会话时，自动切到下一个可用的
+      let viewId = conversation.id;
+      if (conversation.archivedAt && activeConversationId === id) {
+        activeConversationId = store.latestConversationId();
+        viewId = activeConversationId;
+      }
+      log('conversation', body.archived === true ? 'archived' : body.archived === false ? 'restored' : 'renamed', id);
+      return json(res, 200, { conversation, state: statePayload(viewId) });
     }
 
     if (route === 'POST /api/focus') {

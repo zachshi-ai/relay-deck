@@ -203,6 +203,70 @@ test('reload：手工在文件里追加记录后，不重启进程也能生效',
   }
 });
 
+test('归档会话：从默认列表挪走但数据仍在，可恢复（软归档而非删除）', async () => {
+  const { store, dir } = await freshStore();
+  try {
+    const keep = (await store.createConversation('保留')).id;
+    const gone = (await store.createConversation('要归档的')).id;
+    await store.addMessage({ conversationId: gone, agent: 'dsh', role: 'user', text: '这条不能丢' });
+
+    const archived = await store.setConversationArchived(gone, true);
+    assert.ok(archived.archivedAt, '应记录归档时间');
+
+    const visible = store.listConversations();
+    assert.equal(visible.some((c) => c.id === gone), false, '归档后不该出现在默认列表');
+    assert.equal(visible.some((c) => c.id === keep), true);
+
+    const all = store.listConversations({ includeArchived: true });
+    assert.equal(all.length, visible.length + 1);
+    assert.equal(all.find((c) => c.id === gone).archived, true);
+
+    // 消息必须原封不动
+    assert.equal(store.listMessages({ conversationId: gone })[0].text, '这条不能丢');
+    // snapshot 里单独给一份归档列表，界面才能提供"恢复"
+    const snapshot = store.snapshot({ conversationId: keep });
+    assert.equal(snapshot.archivedConversations.length, 1);
+    assert.equal(snapshot.archivedConversations[0].id, gone);
+
+    // 归档后默认会话不应指向它
+    assert.notEqual(store.latestConversationId(), gone);
+
+    // 恢复到列表里
+    await store.setConversationArchived(gone, false);
+    assert.equal(store.listConversations().some((c) => c.id === gone), true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('归档状态会落盘：reload 之后仍然是归档的', async () => {
+  const { store, dir } = await freshStore();
+  try {
+    const id = (await store.createConversation('归档持久化')).id;
+    await store.setConversationArchived(id, true);
+
+    await store.reload();
+    assert.equal(store.listConversations().some((c) => c.id === id), false, 'reload 后不该复活到默认列表');
+    assert.equal(store.listConversations({ includeArchived: true }).find((c) => c.id === id).archived, true);
+
+    // 恢复也要能落盘
+    await store.setConversationArchived(id, false);
+    await store.reload();
+    assert.equal(store.listConversations().some((c) => c.id === id), true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('归档不存在的会话返回 null，不抛异常', async () => {
+  const { store, dir } = await freshStore();
+  try {
+    assert.equal(await store.setConversationArchived('c-nope', true), null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('落盘后可重新加载，且旧数据（无会话字段）自动归入默认会话', async () => {
   const { store, dir } = await freshStore();
   try {

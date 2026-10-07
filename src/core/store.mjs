@@ -141,20 +141,37 @@ export class Store {
     return conversation;
   }
 
+  /**
+   * 归档 / 取消归档。
+   * 刻意做成**软归档**而不是删除：接力链与会话上下文是这条链的证据，
+   * 误删就找不回来了；归档只是从默认列表里挪走，随时可恢复。
+   */
+  async setConversationArchived(id, archived) {
+    const conversation = this.#conversations.get(id);
+    if (!conversation) return null;
+    if (archived) conversation.archivedAt = new Date().toISOString();
+    else delete conversation.archivedAt;
+    await this.#persist({ kind: 'conversation', conversation });
+    return conversation;
+  }
+
   getConversation(id) {
     return this.#conversations.get(id) ?? null;
   }
 
-  listConversations() {
+  listConversations({ includeArchived = false } = {}) {
     return [...this.#conversations.values()]
+      .filter((c) => includeArchived || !c.archivedAt)
       .map((c) => ({
         ...c,
+        archived: Boolean(c.archivedAt),
         messageCount: this.#messages.filter((m) => m.conversationId === c.id).length,
         lastMessageAt: this.#messages.filter((m) => m.conversationId === c.id).at(-1)?.createdAt ?? null,
       }))
       .sort((a, b) => (b.lastMessageAt ?? b.createdAt).localeCompare(a.lastMessageAt ?? a.createdAt));
   }
 
+  /** 默认打开的会话：跳过已归档的 */
   latestConversationId() {
     return this.listConversations()[0]?.id ?? DEFAULT_CONVERSATION_ID;
   }
@@ -280,9 +297,11 @@ export class Store {
   snapshot({ conversationId = null } = {}) {
     const id = conversationId ?? this.latestConversationId();
     const messages = this.listMessages({ conversationId: id });
+    const archived = this.listConversations({ includeArchived: true }).filter((c) => c.archived);
     return {
       conversationId: id,
       conversations: this.listConversations(),
+      archivedConversations: archived,
       messages,
       agentSessions: Object.fromEntries(
         [...this.#agentSessions.entries()]
