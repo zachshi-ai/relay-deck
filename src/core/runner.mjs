@@ -219,26 +219,44 @@ export async function runTurn({
   };
 }
 
-/** 人类可读的一行摘要，供 CLI 与日志使用 */
+/**
+ * 人类可读的一行摘要，供 CLI 与日志使用。
+ *
+ * 刻意写成"怎么都不抛"的：这是展示/日志用的辅助函数，字段缺失或结构意外时
+ * 只能降级显示，绝不能把正在观察的那次运行弄崩。
+ * （实测踩到：未知事件类型且没有 raw 字段时，`JSON.stringify(undefined).slice()` 会抛。）
+ */
 export function describeEvent(event) {
+  const clip = (value, limit) => String(value ?? '').slice(0, limit);
+  const safeJson = (value) => {
+    try {
+      return JSON.stringify(value) ?? String(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  if (!event || typeof event !== 'object') return `raw      ${String(event)}`;
+
   switch (event.type) {
     case 'session.started':
-      return `session  ${event.sessionId}`;
+      return `session  ${event.sessionId ?? '-'}`;
     case 'thinking':
-      return `think    ${event.text.slice(0, 60)}`;
+      return `think    ${clip(event.text, 60)}`;
     case 'text':
-      return `text     ${event.text.slice(0, 120)}`;
+      return `text     ${clip(event.text, 120)}`;
     case 'usage':
-      return `usage    ${JSON.stringify(event.usage)}`;
+      return `usage    ${safeJson(event.usage)}`;
     case 'error':
-      return `ERROR    ${event.message}`;
+      return `ERROR    ${event.message ?? '未知错误'}`;
     case 'final':
-      return `final    ${event.text.slice(0, 120)}`;
+      return `final    ${clip(event.text, 120)}`;
     case 'turn.end':
-      return `end      ${JSON.stringify(event.reason)}`;
+      return `end      ${safeJson(event.reason)}`;
     case 'status':
-      return `status   ${event.phase}`;
+      return `status   ${event.phase ?? '-'}`;
     default:
-      return `raw      ${JSON.stringify(event.raw).slice(0, 120)}`;
+      // 未知类型：优先显示 raw；连 raw 都没有就把整个事件显示出来（别再抛）
+      return `raw      ${clip(safeJson(event.raw ?? event), 120)}`;
   }
 }

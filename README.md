@@ -41,7 +41,7 @@
 | 会话失效自愈验收 | ✅ | `evidence/session-recovery-*.json`：**7/7** |
 | **上游失败矩阵** | ✅ | `scripts/e2e-provider-failure.mjs`：**24/24**（挂住/截断/429/空回答/崩溃/慢但成功 + 圆桌成员挂住，自起服务不碰设备） |
 | **精确取消验收** | ✅ | `scripts/e2e-cancel.mjs`：**10/10** |
-| 单元测试 | ✅ | **116 项**，fixture 全部来自真实抓取 |
+| 单元测试 | ✅ | **127 项**，覆盖率 **98.2% 行 / 91.9% 分支 / 91.2% 函数**，fixture 全部来自真实抓取 |
 
 **跨 Agent 接力的真实验收长这样**：先让 `dsh` 回答出「已记住 42」，再把它的回答作为引用上下文接力给下游 Agent——下游自己的会话里从未出现过 42，它答出 `42`，证明接力上下文确实送达。
 对**没有续跑能力**的 Agent（MiniMax / Kimi）还会多验一轮：**不给接力上下文**再问一次，靠中台注入的历史答对，才算兜底真的生效。
@@ -132,7 +132,8 @@ server.mjs  ── 中台 ──────────────────
 ## 测试与验收
 
 ```bash
-node --test                              # 116 项单测
+node --test                              # 127 项单测（覆盖率 98.2% 行 / 91.9% 分支）
+node --test --experimental-test-coverage # 看覆盖率报告
 node scripts/e2e-relay.mjs               # 真实接力（逐 Agent 验会话续跑）
 node scripts/e2e-http.mjs                # HTTP 层端到端：默认验 dsh → codex
 node scripts/e2e-http.mjs dsh minimax    # 换一对验（含历史兜底那一轮）
