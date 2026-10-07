@@ -94,6 +94,18 @@ node "/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs" -p "<正文>" --
 | 端口 61923（`zcode-host-local-1`） | 试了 `/`、`/health`、`/api`、`/v1/models`、`/mcp`、`/status` 全部 404，不是可猜的 REST API |
 | `zcode.cjs app-server`（stdio JSON-RPC） | 报 provider 配置错误，协议未知 |
 
+补充排查（2026-10-07 复查）：
+
+| 又试了什么 | 结果 |
+| --- | --- |
+| `ZCODE_DATA_BASE_DIR=~/.zcode` | 仍 `Model creation failed` |
+| `ZCODE_DATA_BASE_DIR=~/.zcode/v2`（GUI 凭据所在处） | 仍失败 |
+| `ZCODE_DATA_BASE_DIR=~/.zcode/cli` | 仍失败 |
+| 核对 `~/.zcode/v2/credentials.json` 是否存在 | 存在（GUI 用的），但 CLI 不认它 |
+
+**结论**：这不是路径问题，是 **CLI 侧没有可用登录态**——GUI 登录 ≠ CLI 登录。
+能试的都试过了，剩下的只能由使用者本人完成一次 OAuth，不适合代跑。
+
 **待办**：需要有人先在 CLI 侧完成一次登录
 
 ```bash

@@ -1,0 +1,64 @@
+{
+  "kind": "relaydeck-session-recovery-e2e",
+  "ranAt": "2026-10-07T14:29:45.571Z",
+  "base": "http://127.0.0.1:8787",
+  "agent": "dsh",
+  "conversationId": "c-41ea8f8e",
+  "bogusSession": "session-nonexistent-1791383385571",
+  "realSession": "session-ddff0d79-2a1e-42ba-89a2-3a2224dc875f",
+  "sessionAfterRecovery": "session-ea358b8d-03cd-4b3c-a634-d1d8a4e95a49",
+  "checks": [
+    {
+      "name": "第 1 轮正常产出并建立续跑线",
+      "passed": true,
+      "detail": "session=session-ddff0d79-2a1e-42ba-89a2-3a2224dc875f"
+    },
+    {
+      "name": "故障已注入（热加载后内存里是坏 session）",
+      "passed": true,
+      "detail": "session-nonexistent-1791383385571"
+    },
+    {
+      "name": "坏 session 下仍然成功产出（自愈生效）",
+      "passed": true,
+      "detail": "text=\"收到\" error=-"
+    },
+    {
+      "name": "如实上报 contextReset（用户必须知道上下文被重置）",
+      "passed": true,
+      "detail": "contextReset=true"
+    },
+    {
+      "name": "重试用了一次且只有一次重试",
+      "passed": true,
+      "detail": "attempts=2"
+    },
+    {
+      "name": "坏续跑线已被替换成新线",
+      "passed": true,
+      "detail": "now=session-ea358b8d-03cd-4b…"
+    },
+    {
+      "name": "后续轮次恢复正常（不会再重置）",
+      "passed": true,
+      "detail": "contextReset=false attempts=1"
+    }
+  ],
+  "turns": {
+    "first": {
+      "ok": true,
+      "sessionId": "session-ddff0d79-2a1e-42ba-89a2-3a2224dc875f"
+    },
+    "afterPoison": {
+      "ok": true,
+      "text": "收到",
+      "contextReset": true,
+      "attempts": 2
+    },
+    "afterRecovery": {
+      "ok": true,
+      "contextReset": false,
+      "attempts": 1
+    }
+  }
+}
