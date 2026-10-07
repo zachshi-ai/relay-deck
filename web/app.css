@@ -186,6 +186,17 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .conv-item .conv-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv-item .conv-meta { font-size: 11px; color: #5f6c7d; }
 
+/* 适配器不可用 */
+.agent-card.unavailable { opacity: 0.75; border-style: dashed; }
+.warn-badge {
+  font-size: 10px;
+  color: var(--err);
+  border: 1px solid #5c2220;
+  border-radius: 999px;
+  padding: 0 5px;
+  margin-left: 4px;
+}
+
 /* 已归档会话 */
 .archived-box { border-top: 1px dashed var(--line); margin-top: 4px; }
 .archived-toggle { padding: 6px 12px; font-size: 11px; color: #5f6c7d; cursor: pointer; }

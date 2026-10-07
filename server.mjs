@@ -28,6 +28,7 @@ import { resolveHardwareEvent, resolveHidCombo, describeCommand } from './src/ha
 import { computeLedState, toWs2812Frame, frameToHex, describeLedState } from './src/hardware/led.mjs';
 import { buildBoardStatus, aggregateAgentStatus, AGENT_STATUS_NAMES, epochSequence } from './src/hardware/agent-status.mjs';
 import { createBoardBridge } from './src/hardware/bridge.mjs';
+import { inspectAdapters, readinessSummary, formatReadiness } from './src/adapters/readiness.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(HERE, 'web');
@@ -110,6 +111,14 @@ const boardBridge = createBoardBridge({
   enabled: process.env.RELAYDECK_HID_BRIDGE === '1',
   log,
 });
+
+// 适配器就绪状态：启动时算一次（避免每个请求都去 which），管理接口可刷新
+let adapterReadiness = inspectAdapters(ADAPTERS);
+
+function refreshReadiness() {
+  adapterReadiness = inspectAdapters(ADAPTERS);
+  return adapterReadiness;
+}
 
 function setRunStatus(agentId, status) {
   runStatus.set(agentId, status);
@@ -221,11 +230,14 @@ function statePayload(conversationId = null) {
       sessionId: store.getAgentSession(snapshot.conversationId, a.id),
       lastMessageAt: store.lastAgentMessage(snapshot.conversationId, a.id)?.createdAt ?? null,
       runStatus: runStatus.get(a.id) ?? 'idle',
+      available: adapterReadiness.find((r) => r.id === a.id)?.available ?? true,
+      unavailableNote: adapterReadiness.find((r) => r.id === a.id)?.note ?? null,
     })),
     focusMessageId,
     chair: DEFAULT_CHAIR,
     viewIndex,
     runs: activeRunList(),
+    readiness: readinessSummary(adapterReadiness),
     bridge: { enabled: boardBridge.enabled, reason: boardBridge.reason },
     led: ledSnapshot(),
     ...snapshot,
@@ -451,6 +463,7 @@ const server = http.createServer(async (req, res) => {
     // 手工修过 data/store.jsonl 之后不必重启进程：重新从磁盘加载一次
     if (route === 'POST /api/admin/reload') {
       await store.reload();
+      refreshReadiness();
       log('admin', '已重新从磁盘加载数据');
       return json(res, 200, { reloaded: true, state: statePayload(store.latestConversationId()) });
     }
@@ -756,4 +769,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, '127.0.0.1', () => {
   log(`中台已启动 http://127.0.0.1:${PORT}`);
   log(`已注册 Agent：${ADAPTERS.map((a) => a.id).join(', ')}（主持人默认 ${DEFAULT_CHAIR}）`);
+  log(`适配器就绪：\n${formatReadiness(adapterReadiness)}`);
+  const notReady = adapterReadiness.filter((r) => !r.available);
+  if (notReady.length) log(`注意：有 ${notReady.length} 个适配器当前不可用，发请求时才会报错`);
 });

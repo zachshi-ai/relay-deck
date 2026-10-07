@@ -274,12 +274,16 @@ function renderAgents() {
     const card = document.createElement('div');
     const isRunning = running.has(agent.id);
     const last = state.messages.filter((m) => m.agent === agent.id && m.role === 'agent').at(-1);
-    const dotClass = isRunning ? 'dot-running' : last ? 'dot-ok' : 'dot-idle';
-    card.className = `agent-card${currentAgent === agent.id ? ' active' : ''}`;
+    const unavailable = agent.available === false;
+    const dotClass = unavailable ? 'dot-err' : isRunning ? 'dot-running' : last ? 'dot-ok' : 'dot-idle';
+    card.className = `agent-card${currentAgent === agent.id ? ' active' : ''}${unavailable ? ' unavailable' : ''}`;
+    if (unavailable) card.title = `当前不可用：${agent.unavailableNote ?? '找不到可执行文件'}`;
     card.innerHTML = `
       <span class="dot ${dotClass}"></span>
       <div>
-        <div class="name" style="color:${agentColor(agent.id)}">${agent.label}</div>
+        <div class="name" style="color:${agentColor(agent.id)}">${agent.label}${
+          unavailable ? ' <span class="warn-badge">不可用</span>' : ''
+        }</div>
         <div class="meta">session ${shortId(agent.sessionId)}</div>
         <div class="meta">${agent.capabilities?.resume ? '可续跑' : '不可续跑'} · ${
           last?.meta?.elapsedMs ? `${last.meta.elapsedMs}ms` : '未计时'

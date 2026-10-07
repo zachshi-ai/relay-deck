@@ -49,6 +49,51 @@ function startServer(port, dataDir) {
   };
 }
 
+test('适配器不可用要在启动时就暴露出来（不必等发请求才炸）', async () => {
+  const dataDir = await mkdtemp(path.join(tmpdir(), 'relaydeck-smoke-'));
+  const port = 18000 + Math.floor(Math.random() * 2000);
+  const child = spawn(process.execPath, ['server.mjs'], {
+    cwd: ROOT,
+    env: {
+      ...process.env,
+      RELAYDECK_PORT: String(port),
+      RELAYDECK_DATA: dataDir,
+      RELAYDECK_MMX_BIN: '/nonexistent/bin/mmx',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stdout = '';
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk.toString();
+  });
+
+  try {
+    const deadline = Date.now() + 15000;
+    while (!stdout.includes('中台已启动') && Date.now() < deadline && child.exitCode === null) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.equal(child.exitCode, null, `服务没起来：${stdout}`);
+
+    // 启动日志里就要写明哪个不可用、原因是什么
+    assert.match(stdout, /✗ minimax/);
+    assert.match(stdout, /找不到文件：\/nonexistent\/bin\/mmx/);
+    assert.match(stdout, /有 1 个适配器当前不可用/);
+
+    const state = await (await fetch(`http://127.0.0.1:${port}/api/state`)).json();
+    const minimax = state.agents.find((a) => a.id === 'minimax');
+    assert.equal(minimax.available, false, 'state 里要标出不可用');
+    assert.match(minimax.unavailableNote, /找不到文件/);
+    assert.equal(state.readiness.total, state.agents.length);
+    assert.deepEqual(state.readiness.missing.map((m) => m.id), ['minimax']);
+    // 其他适配器不受影响
+    assert.equal(state.agents.find((a) => a.id === 'dsh').available, true);
+  } finally {
+    child.kill('SIGTERM');
+    await new Promise((resolve) => child.on('close', resolve));
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('中台能被拉起来：没有语法错误、命名导入齐全、端口可绑定', async () => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'relaydeck-smoke-'));
   const port = 18000 + Math.floor(Math.random() * 2000);
