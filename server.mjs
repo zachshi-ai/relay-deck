@@ -21,6 +21,7 @@ import { Store } from './src/core/store.mjs';
 import { buildRelayPrompt, buildHistoryPrompt, clip } from './src/core/relay.mjs';
 import { runRoundtable } from './src/core/roundtable.mjs';
 import { createAgentQueue } from './src/core/queue.mjs';
+import { runTurnWithRecovery } from './src/core/session-recovery.mjs';
 import { resolveHardwareEvent, resolveHidCombo, describeCommand } from './src/hardware/keymap.mjs';
 import { computeLedState, toWs2812Frame, frameToHex, describeLedState } from './src/hardware/led.mjs';
 
@@ -184,20 +185,31 @@ async function askOnce({
 
   const started = Date.now();
   setRunStatus(agentId, 'running');
-  // 同一个 Agent 串行（kimi 的 runner.lock 拒绝并发；连按两下也不该起两个进程）
-  const result = await agentQueue.run(agentId, () =>
-    runTurn({
-      adapter,
-      prompt: effectivePrompt,
-      sessionId: store.getAgentSession(conversationId, agentId),
-      timeoutMs: TURN_TIMEOUT_MS,
-      onEvent,
-      onChild,
-    }),
-  );
+  const existingSession = store.getAgentSession(conversationId, agentId);
+  // 同一个 Agent 串行（kimi 的 runner.lock 拒绝并发；连按两下也不该起两个进程）；
+  // 续跑线失效时自动丢掉旧线重跑一次，避免整个会话被一条坏 session 永久卡死。
+  const recovery = await runTurnWithRecovery({
+    sessionId: existingSession,
+    runOnce: ({ sessionId }) =>
+      agentQueue.run(agentId, () =>
+        runTurn({
+          adapter,
+          prompt: effectivePrompt,
+          sessionId,
+          timeoutMs: TURN_TIMEOUT_MS,
+          onEvent,
+          onChild,
+        }),
+      ),
+  });
+  const result = recovery.result;
   // 硬件侧的 LED 靠这个状态点灯，成败都要如实落到灯上
   setRunStatus(agentId, result.ok ? 'ok' : 'error');
 
+  if (recovery.contextReset) {
+    log('session', agentId, `续跑线失效，已重置上下文重跑（旧线 ${String(recovery.previousSession).slice(0, 20)}…）`);
+    await store.clearAgentSession(conversationId, agentId);
+  }
   if (result.sessionId) await store.setAgentSession(conversationId, agentId, result.sessionId);
 
   let agentMessage = null;
@@ -214,11 +226,26 @@ async function askOnce({
         warnings: result.warnings,
         usage: result.usage,
         elapsedMs: Date.now() - started,
+        // 上下文被重置过就如实记下来：用户需要知道这个 Agent 失忆了
+        contextReset: recovery.contextReset,
+        previousSession: recovery.previousSession ? String(recovery.previousSession).slice(0, 24) : null,
+        attempts: recovery.attempts,
+        firstError: recovery.contextReset ? (recovery.firstError ?? null) : null,
       },
     });
   }
 
-  return { ...result, userMessage, agentMessage, effectivePrompt, focus, upstream };
+  return {
+    ...result,
+    userMessage,
+    agentMessage,
+    effectivePrompt,
+    focus,
+    upstream,
+    contextReset: recovery.contextReset,
+    previousSession: recovery.previousSession,
+    attempts: recovery.attempts,
+  };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -275,6 +302,13 @@ const server = http.createServer(async (req, res) => {
         killed += 1;
       }
       return json(res, 200, { killed });
+    }
+
+    // 手工修过 data/store.jsonl 之后不必重启进程：重新从磁盘加载一次
+    if (route === 'POST /api/admin/reload') {
+      await store.reload();
+      log('admin', '已重新从磁盘加载数据');
+      return json(res, 200, { reloaded: true, state: statePayload(store.latestConversationId()) });
     }
 
     if (route === 'GET /api/hardware/led') {
@@ -451,6 +485,8 @@ const server = http.createServer(async (req, res) => {
           userId: result.userMessage?.id ?? null,
           messageId: result.agentMessage?.id ?? null,
           relayOf: result.focus?.id ?? null,
+          contextReset: result.contextReset,
+          attempts: result.attempts,
           state: statePayload(conversationId),
         });
       } catch (err) {

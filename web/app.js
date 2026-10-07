@@ -45,6 +45,9 @@ const state = {
   focusMessageId: null,
 };
 const search = { query: '', matches: [], index: -1, scope: 'conversation' };
+// 允许用 ?conversation=<id> 直接打开某个会话（可分享、也方便截图与排查）
+const initialConversation = new URLSearchParams(location.search).get('conversation');
+if (initialConversation) state.conversationId = initialConversation;
 let currentAgent = null; // null = 全部
 let focusId = null;
 const running = new Set();
@@ -251,6 +254,8 @@ function renderMessages() {
     const badges = [];
     if (msg.id === focusId) badges.push('焦点');
     if (msg.meta?.kind === 'roundtable-summary') badges.push('主持人汇总');
+    // 续跑线失效被重置过：必须显式告诉用户"这个 Agent 失忆了"
+    if (msg.meta?.contextReset) badges.push('上下文已重置');
     if (msg.meta?.elapsedMs) badges.push(`${msg.meta.elapsedMs}ms`);
     if (msg.meta?.warnings?.length) badges.push(`警告 ${msg.meta.warnings.length}`);
 

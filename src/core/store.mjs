@@ -71,8 +71,31 @@ export class Store {
     }
     if (record.kind === 'agent-session') {
       const conversationId = record.conversationId ?? DEFAULT_CONVERSATION_ID;
-      this.#agentSessions.set(sessionKey(conversationId, record.agent), record.sessionId);
+      const key = sessionKey(conversationId, record.agent);
+      // sessionId 为 null 是墓碑记录：表示这条续跑线已被清掉，重载时不能再复活
+      if (record.sessionId) this.#agentSessions.set(key, record.sessionId);
+      else this.#agentSessions.delete(key);
     }
+  }
+
+  /** 重新从磁盘加载（消息 / 会话 / 续跑线）。用于手工修数据后恢复，或验证落盘一致性。 */
+  async reload() {
+    this.#messages = [];
+    this.#agentSessions.clear();
+    const keep = new Map(this.#conversations);
+    this.#conversations = new Map();
+    this.#conversations.set(DEFAULT_CONVERSATION_ID, {
+      id: DEFAULT_CONVERSATION_ID,
+      title: '默认会话',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await this.load();
+    // 内存里刚创建的会话在文件里可能还没有记录，补回来
+    for (const [id, conversation] of keep) {
+      if (!this.#conversations.has(id)) this.#conversations.set(id, conversation);
+    }
+    return this;
   }
 
   async #persist(record) {
@@ -208,6 +231,18 @@ export class Store {
 
   getAgentSession(conversationId, agent) {
     return this.#agentSessions.get(sessionKey(conversationId, agent)) ?? null;
+  }
+
+  /**
+   * 清掉一条续跑线（写墓碑，重载后不会复活）。
+   * 场景：上游会话已失效，继续带着它只会让这个会话永久失败。
+   */
+  async clearAgentSession(conversationId, agent) {
+    const key = sessionKey(conversationId, agent);
+    if (!this.#agentSessions.has(key)) return false;
+    this.#agentSessions.delete(key);
+    await this.#persist({ kind: 'agent-session', conversationId, agent, sessionId: null });
+    return true;
   }
 
   async setAgentSession(conversationId, agent, sessionId) {

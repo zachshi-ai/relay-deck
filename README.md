@@ -28,8 +28,11 @@
 | 全局热键守护进程 | ✅ 已编译 | `tools/hotkeyd.swift`（Swift，CGEventTap），`--selftest` 实测通 |
 | 硬件模拟器 | ✅ | `bin/simulate.mjs`，没板子也能驱动整条链路 |
 | 按 Agent 串行队列 | ✅ | `src/core/queue.mjs`（kimi 的 runner.lock 拒绝并发） |
-| HTTP 层端到端验收 | ✅ | `evidence/http-e2e-*.json`：**11/11 项通过** |
-| 单元测试 | ✅ | **60 项**，fixture 全部来自真实抓取 |
+| **续跑线自愈** | ✅ | 坏 session 自动丢弃重跑，如实上报 `contextReset`（`src/core/session-recovery.mjs`） |
+| HTTP 层端到端验收 | ✅ | `evidence/http-e2e-*.json`：**11/11 项通过**（三组） |
+| 边界验证 | ✅ | `evidence/boundary-*.json`：**10/10**（坏焦点/未绑定输入/未知 Agent/spawn 失败/超时/并发） |
+| 会话失效自愈验收 | ✅ | `evidence/session-recovery-*.json`：**7/7** |
+| 单元测试 | ✅ | **68 项**，fixture 全部来自真实抓取 |
 
 **跨 Agent 接力的真实验收长这样**：先让 `dsh` 回答出「已记住 42」，再把它的回答作为引用上下文接力给下游 Agent——下游自己的会话里从未出现过 42，它答出 `42`，证明接力上下文确实送达。
 对**没有续跑能力**的 Agent（MiniMax / Kimi）还会多验一轮：**不给接力上下文**再问一次，靠中台注入的历史答对，才算兜底真的生效。
@@ -41,7 +44,7 @@ cd relay-deck
 node server.mjs                 # 默认 http://127.0.0.1:8787
 ```
 
-浏览器打开 `http://127.0.0.1:8787/`（左侧会话列表、中间消息流、右侧圆桌，左下角是 LED 真值表）。
+浏览器打开 `http://127.0.0.1:8787/`（左侧会话列表、中间消息流、右侧圆桌，左下角是 LED 真值表）。也可以用 `http://127.0.0.1:8787/?conversation=<会话id>` 直接打开某个会话。
 
 ### 命令行
 
@@ -110,16 +113,18 @@ server.mjs  ── 中台 ──────────────────
 ## 测试与验收
 
 ```bash
-node --test                              # 60 项单测
+node --test                              # 68 项单测
 node scripts/e2e-relay.mjs               # 真实接力（逐 Agent 验会话续跑）
 node scripts/e2e-http.mjs                # HTTP 层端到端：默认验 dsh → codex
 node scripts/e2e-http.mjs dsh minimax    # 换一对验（含历史兜底那一轮）
 node scripts/e2e-http.mjs dsh kimi
+node scripts/e2e-boundary.mjs            # 边界：坏输入 / spawn 失败 / 超时 / 并发
+node scripts/e2e-session-recovery.mjs    # 续跑线失效自愈（脚本自己制造故障）
 ```
 
 单测 fixture 全部来自**真实抓取**的输出，不是编造的。
 
-## 七条来自实测的硬约束
+## 九条来自实测的硬约束
 
 1. **退出码不可信**：CLI 失败时退出码也可能是 `0`。判失败要靠"是否有文本 + 是否出现致命错误事件 + stderr"。
 2. **警告 ≠ 失败**：Codex 先抛 `Under-development features enabled: chronicle`（条目级 error），随后正常回答；不区分 `fatal` 会把正确答案判成失败。
@@ -128,6 +133,8 @@ node scripts/e2e-http.mjs dsh kimi
 5. **轮次去重只能按阶段、不能按身份**：主持人常常同时是参与者，按身份去重会吞掉参与者的那一轮。
 6. **不是所有 CLI 都是行分隔流**：MiniMax 输出一个跨多行的 JSON；Kimi 把日志和回答混在同一个流里。执行器必须支持整体解析与日志过滤。
 7. **历史注入超限时要丢最老的、留最新的**：正序拼接后整体截断会把最近一轮丢掉（已用回归测试锁住）。
+8. **坏续跑线会把整个会话永久卡死**：上游 session 过期/被删后，每一轮都带同一个坏 id 失败，而且没有任何机制会清掉它。现在会丢掉旧线重跑一次，并如实上报"上下文已重置"。
+9. **显式配置不能被静默忽略**：环境变量指向不存在的路径时若悄悄回退到 PATH，配错了也毫无提示；启动失败的错误也不能被适配器的"空输出"盖住。
 
 ## 已知限制（v1）
 

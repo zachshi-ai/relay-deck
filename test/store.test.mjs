@@ -147,6 +147,62 @@ test('用量汇总：按 Agent 累加 token 与平均耗时', async () => {
   }
 });
 
+test('清掉续跑线：写墓碑，reload 后不会复活', async () => {
+  const { store, dir } = await freshStore();
+  try {
+    const c = (await store.createConversation('坏 session')).id;
+    await store.setAgentSession(c, 'dsh', 'session-dead');
+    assert.equal(store.getAgentSession(c, 'dsh'), 'session-dead');
+
+    const cleared = await store.clearAgentSession(c, 'dsh');
+    assert.equal(cleared, true);
+    assert.equal(store.getAgentSession(c, 'dsh'), null);
+
+    // 重新从磁盘加载：墓碑记录必须压住前面那条真实记录
+    await store.reload();
+    assert.equal(store.getAgentSession(c, 'dsh'), null, 'reload 后不能复活');
+    assert.equal(store.snapshot({ conversationId: c }).agentSessions.dsh, undefined);
+
+    // 再清一次应返回 false（没有可清的东西）
+    assert.equal(await store.clearAgentSession(c, 'dsh'), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('reload：手工在文件里追加记录后，不重启进程也能生效', async () => {
+  const { store, dir } = await freshStore();
+  try {
+    const c = (await store.createConversation('热加载')).id;
+    await store.addMessage({ conversationId: c, agent: 'dsh', role: 'user', text: '第一条' });
+
+    // 模拟"有人手工改了数据文件"
+    const fs = await import('node:fs/promises');
+    const extra = {
+      kind: 'message',
+      message: {
+        id: 'm-manual-1',
+        conversationId: c,
+        agent: 'dsh',
+        role: 'user',
+        text: '手工追加的一条',
+        sessionId: null,
+        meta: null,
+        createdAt: new Date().toISOString(),
+      },
+    };
+    await fs.appendFile(path.join(dir, 'store.jsonl'), `${JSON.stringify(extra)}\n`);
+
+    assert.equal(store.listMessages({ conversationId: c }).length, 1, 'reload 前看不到');
+    await store.reload();
+    const messages = store.listMessages({ conversationId: c });
+    assert.equal(messages.length, 2);
+    assert.equal(messages.at(-1).text, '手工追加的一条');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('落盘后可重新加载，且旧数据（无会话字段）自动归入默认会话', async () => {
   const { store, dir } = await freshStore();
   try {
