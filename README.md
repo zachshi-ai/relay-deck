@@ -23,6 +23,8 @@
 | 全文搜索与跳转 | ✅ | `/api/search`，`/` 聚焦、`Enter` 跳到下一个命中 |
 | 接力链回溯 | ✅ | 消息上渲染面包屑，可点击回到链上任一环 |
 | 用量可见 | ✅ | 每 Agent 的轮数 / token / 平均耗时（四家 usage 字段不同，已折算） |
+| **接力链导出 Markdown** | ✅ | `GET /api/export?message=`，界面上有「导出接力链」按钮 |
+| **会话软归档与恢复** | ✅ | `PATCH /api/conversations {id, archived}`；不删数据，列表里可一键恢复 |
 | 圆桌广播 + 主持人汇总 | ✅ | [4 个异构 Agent 的原始事件流](evidence/roundtable-4agents-20261007T215742.sse) |
 | 硬件命令层 + LED 真值表 | ✅ 纯逻辑已测 | `src/hardware/`，S1–S8 / 旋钮 → 中台命令；5 颗 WS2812 状态编码 |
 | **板载 LED 协议对接** | ✅ 端到端已验 | **复用固件已有的 Agent Status v1**（report `0x12`）：聚合帧 + 编码器 + [13/13 验收](evidence/)，见 [阶段2b 清单](docs/hardware-stage2b.md) |
@@ -36,6 +38,8 @@
 | HTTP 层端到端验收 | ✅ | `evidence/http-e2e-*.json`：**11/11 项通过**（三组） |
 | 边界验证 | ✅ | `evidence/boundary-*.json`：**10/10**（坏焦点/未绑定输入/未知 Agent/spawn 失败/超时/并发） |
 | 会话失效自愈验收 | ✅ | `evidence/session-recovery-*.json`：**7/7** |
+| **上游失败矩阵** | ✅ | `scripts/e2e-provider-failure.mjs`：**19/19**（挂住/截断/429/空回答/崩溃/慢但成功，自起服务不碰设备） |
+| **精确取消验收** | ✅ | `scripts/e2e-cancel.mjs`：**10/10** |
 | 单元测试 | ✅ | **107 项**，fixture 全部来自真实抓取 |
 
 **跨 Agent 接力的真实验收长这样**：先让 `dsh` 回答出「已记住 42」，再把它的回答作为引用上下文接力给下游 Agent——下游自己的会话里从未出现过 42，它答出 `42`，证明接力上下文确实送达。
