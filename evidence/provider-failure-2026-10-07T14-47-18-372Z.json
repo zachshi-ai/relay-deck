@@ -1,0 +1,196 @@
+{
+  "kind": "relaydeck-provider-failure-e2e",
+  "ranAt": "2026-10-07T14:47:18.372Z",
+  "note": "本脚本自身起中台与假 provider，不接触任何实体设备（RELAYDECK_HID_BRIDGE=0）",
+  "checks": [
+    {
+      "name": "临时中台能起来（假 provider 已就位）",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "上游挂住不回 → 如实判失败（ok=false）",
+      "passed": true,
+      "detail": "ok=false error=超时（2500ms）后已终止"
+    },
+    {
+      "name": "上游挂住不回 → 错误信息能指认原因",
+      "passed": true,
+      "detail": "超时（2500ms）后已终止"
+    },
+    {
+      "name": "上游挂住不回 → 板级状态帧为 Failed（红灯）",
+      "passed": true,
+      "detail": "实际 Failed"
+    },
+    {
+      "name": "上游输出被截断 → 如实判失败（ok=false）",
+      "passed": true,
+      "detail": "ok=false error=没有产出任何文本"
+    },
+    {
+      "name": "上游输出被截断 → 错误信息能指认原因",
+      "passed": true,
+      "detail": "没有产出任何文本"
+    },
+    {
+      "name": "上游输出被截断 → 板级状态帧为 Failed（红灯）",
+      "passed": true,
+      "detail": "实际 Failed"
+    },
+    {
+      "name": "上游限流（429） → 如实判失败（ok=false）",
+      "passed": true,
+      "detail": "ok=false error=mmx 没有任何输出｜上游 stderr：Error: 429 rate limited by upstream"
+    },
+    {
+      "name": "上游限流（429） → 错误信息能指认原因",
+      "passed": true,
+      "detail": "mmx 没有任何输出｜上游 stderr：Error: 429 rate limited by upstream"
+    },
+    {
+      "name": "上游限流（429） → 板级状态帧为 Failed（红灯）",
+      "passed": true,
+      "detail": "实际 Failed"
+    },
+    {
+      "name": "上游返回空回答 → 如实判失败（ok=false）",
+      "passed": true,
+      "detail": "ok=false error=没有产出任何文本"
+    },
+    {
+      "name": "上游返回空回答 → 错误信息能指认原因",
+      "passed": true,
+      "detail": "没有产出任何文本"
+    },
+    {
+      "name": "上游返回空回答 → 板级状态帧为 Failed（红灯）",
+      "passed": true,
+      "detail": "实际 Failed"
+    },
+    {
+      "name": "上游进程直接退出 → 如实判失败（ok=false）",
+      "passed": true,
+      "detail": "ok=false error=mmx 没有任何输出｜上游退出码 3"
+    },
+    {
+      "name": "上游进程直接退出 → 错误信息能指认原因",
+      "passed": true,
+      "detail": "mmx 没有任何输出｜上游退出码 3"
+    },
+    {
+      "name": "上游进程直接退出 → 板级状态帧为 Failed（红灯）",
+      "passed": true,
+      "detail": "实际 Failed"
+    },
+    {
+      "name": "连续失败之后，正常请求仍能成功（中台没被拖死）",
+      "passed": true,
+      "detail": "text=\"一切正常\""
+    },
+    {
+      "name": "恢复成功后板级状态帧变为 CompletedUnread（绿灯）",
+      "passed": true,
+      "detail": "实际 CompletedUnread"
+    },
+    {
+      "name": "上游很慢但最终成功 → 不误判为失败",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "圆桌：挂住的成员被判超时并跳过",
+      "passed": true,
+      "detail": "超时=minimax｜各自结果=[[\"dsh\",true,null],[\"codex\",false,\"没有产出任何文本\"],[\"minimax\",false,\"成员超时（1s）已跳过\"]]"
+    },
+    {
+      "name": "圆桌：其他成员不受影响，照常有回答",
+      "passed": false,
+      "detail": "成功 1/3"
+    },
+    {
+      "name": "圆桌：主持人照常汇总",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "圆桌：整轮在秒级结束，而不是等满总超时",
+      "passed": true,
+      "detail": "实际 842ms"
+    },
+    {
+      "name": "圆桌：SSE 里能看到成员超时（timedOut 标记随 phase 推出）",
+      "passed": true,
+      "detail": "[{\"phase\":\"fanout.answer\",\"agent\":\"dsh\",\"ok\":true,\"chars\":4},{\"phase\":\"fanout.answer\",\"agent\":\"codex\",\"ok\":false,\"chars\":0},{\"phase\":\"fanout.answer\",\"agent\":\"minimax\",\"ok\":false,\"chars\":0,\"timedOut\":true}]"
+    }
+  ],
+  "results": [
+    {
+      "mode": "hang",
+      "ok": false,
+      "error": "超时（2500ms）后已终止",
+      "elapsedMs": 2511,
+      "boardState": "Failed"
+    },
+    {
+      "mode": "garbage",
+      "ok": false,
+      "error": "没有产出任何文本",
+      "elapsedMs": 34,
+      "boardState": "Failed"
+    },
+    {
+      "mode": "rate-limited",
+      "ok": false,
+      "error": "mmx 没有任何输出｜上游 stderr：Error: 429 rate limited by upstream",
+      "elapsedMs": 36,
+      "boardState": "Failed"
+    },
+    {
+      "mode": "empty",
+      "ok": false,
+      "error": "没有产出任何文本",
+      "elapsedMs": 35,
+      "boardState": "Failed"
+    },
+    {
+      "mode": "crash",
+      "ok": false,
+      "error": "mmx 没有任何输出｜上游退出码 3",
+      "elapsedMs": 31,
+      "boardState": "Failed"
+    },
+    {
+      "mode": "slow-ok",
+      "ok": true,
+      "text": "一切正常",
+      "boardState": "CompletedUnread"
+    },
+    {
+      "roundtable": {
+        "elapsedMs": 842,
+        "answers": [
+          {
+            "agent": "dsh",
+            "ok": true,
+            "timedOut": false,
+            "error": null
+          },
+          {
+            "agent": "codex",
+            "ok": false,
+            "timedOut": false,
+            "error": "没有产出任何文本"
+          },
+          {
+            "agent": "minimax",
+            "ok": false,
+            "timedOut": true,
+            "error": "成员超时（1s）已跳过"
+          }
+        ],
+        "summaryOk": true
+      }
+    }
+  ]
+}

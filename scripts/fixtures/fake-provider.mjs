@@ -11,8 +11,11 @@
 import fs from 'node:fs';
 
 const mode = fs.readFileSync(process.env.FAKE_MODE_FILE, 'utf8').trim();
+// 注意：process.argv[1] 是脚本路径，参数从 argv[2] 开始。
+// 这里用"成员包含"判断，别用索引——索引写错会让某一家拿到别家的输出格式，
+// 而症状是"解析不出正文"，很难一眼看出是 fixture 的锅。
 const dshFlavor = process.argv.includes('--profile');
-const codexFlavor = process.argv[1] === 'exec';
+const codexFlavor = process.argv.includes('exec');
 
 function emit(text) {
   if (dshFlavor) {

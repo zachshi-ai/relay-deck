@@ -210,7 +210,7 @@ try {
   check(
     '圆桌：挂住的成员被判超时并跳过',
     timedOutMembers.length === 1,
-    `超时成员=${timedOutMembers.map((a) => a.agent).join(',') || '无'}`,
+    `超时=${timedOutMembers.map((a) => a.agent).join(',') || '无'}｜各自结果=${JSON.stringify((roundDone?.answers ?? []).map((a) => [a.agent, a.ok, a.error]))}`,
   );
   check(
     '圆桌：其他成员不受影响，照常有回答',
@@ -231,7 +231,7 @@ try {
   results.push({
     roundtable: {
       elapsedMs: roundElapsed,
-      answers: (roundDone?.answers ?? []).map((a) => ({ agent: a.agent, ok: a.ok, timedOut: Boolean(a.timedOut) })),
+      answers: (roundDone?.answers ?? []).map((a) => ({ agent: a.agent, ok: a.ok, timedOut: Boolean(a.timedOut), error: a.error })),
       summaryOk: roundDone?.summary?.ok,
     },
   });
