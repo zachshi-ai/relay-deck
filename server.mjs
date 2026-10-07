@@ -34,6 +34,8 @@ const WEB_DIR = path.join(HERE, 'web');
 const PORT = Number(process.env.RELAYDECK_PORT ?? 8787);
 const DEFAULT_CHAIR = process.env.RELAYDECK_CHAIR ?? 'dsh';
 const TURN_TIMEOUT_MS = Number(process.env.RELAYDECK_TIMEOUT ?? 180000);
+// 圆桌里单个成员的上限：一个挂住的成员不该拖住整轮（到点跳过并掐掉它）
+const MEMBER_TIMEOUT_MS = Number(process.env.RELAYDECK_MEMBER_TIMEOUT_MS ?? 90000);
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -562,6 +564,8 @@ const server = http.createServer(async (req, res) => {
             agents: agentIds,
             chair: DEFAULT_CHAIR,
             question,
+            memberTimeoutMs: MEMBER_TIMEOUT_MS,
+            onMemberTimeout: ({ agent }) => cancelRuns({ agent }),
             onPhase: () => {},
             askAgent: async (agentId, prompt, { stage = 'fanout' } = {}) => {
               const turn = await askOnce({
@@ -670,6 +674,11 @@ const server = http.createServer(async (req, res) => {
           chair,
           question: snapshot,
           concurrency: Number(body.concurrency ?? 3),
+          memberTimeoutMs: Number(body.memberTimeoutMs ?? MEMBER_TIMEOUT_MS),
+          onMemberTimeout: ({ agent, stage }) => {
+            log('roundtable', `${agent} ${stage} 超时，已请求取消`);
+            cancelRuns({ agent });
+          },
           onPhase: (phase) => sse.send('phase', phase),
           askAgent: async (agentId, prompt, { stage = 'fanout' } = {}) => {
             const result = await askOnce({

@@ -111,6 +111,67 @@ test('圆桌按「阶段」标注调用：主持人同时是参与者时也不�
   assert.equal(chair[0].hasChairPrompt, true, '只有主持人轮才收到汇总 prompt');
 });
 
+test('圆桌：单个成员挂住不能拖住整轮（到点判超时、跳过、并通知上层取消）', async () => {
+  const timedOut = [];
+  const started = Date.now();
+  const { answers, summary, chairPrompt } = await runRoundtable({
+    agents: ['dsh', 'codex', 'minimax'],
+    question: '这块板还能做什么？',
+    chair: 'dsh',
+    concurrency: 3,
+    memberTimeoutMs: 200,
+    onMemberTimeout: (info) => timedOut.push(info),
+    askAgent: async (agent, prompt) => {
+      if (agent === 'codex' && !prompt.includes('## 共识')) {
+        return new Promise(() => {}); // 永远不回：模拟挂住
+      }
+      if (prompt.includes('## 共识')) return { agent, ok: true, text: '## 共识\n可以' };
+      return { agent, ok: true, text: `${agent} 的回答` };
+    },
+  });
+
+  assert.ok(Date.now() - started < 2000, '不该等到底层 promise 结束');
+  assert.equal(answers.length, 3);
+  const hung = answers.find((a) => a.agent === 'codex');
+  assert.equal(hung.ok, false);
+  assert.equal(hung.timedOut, true);
+  assert.match(hung.error, /超时（0s）已跳过/);
+  assert.deepEqual(timedOut, [{ agent: 'codex', stage: 'fanout' }], '必须通知上层去取消那一轮');
+  assert.equal(answers.filter((a) => a.ok).length, 2, '其他成员不受影响');
+  assert.equal(summary.ok, true, '主持人照常汇总');
+  assert.match(chairPrompt, /成员超时/, '失败要如实写进主持人 prompt');
+});
+
+test('圆桌：主持人挂住也要被判超时并跳过，而不是让整轮悬着', async () => {
+  const timedOut = [];
+  const { summary } = await runRoundtable({
+    agents: ['dsh', 'codex'],
+    question: 'q',
+    chair: 'dsh',
+    memberTimeoutMs: 150,
+    onMemberTimeout: (info) => timedOut.push(info),
+    askAgent: async (agent, prompt) => {
+      if (prompt.includes('## 共识')) return new Promise(() => {}); // 主持人挂住
+      return { agent, ok: true, text: '回答' };
+    },
+  });
+  assert.equal(summary.ok, false);
+  assert.equal(summary.timedOut, true);
+  assert.match(summary.error, /主持人超时（0s）已跳过/);
+  assert.deepEqual(timedOut, [{ agent: 'dsh', stage: 'chair' }]);
+});
+
+test('圆桌：memberTimeoutMs=0 时不设超时（默认行为不变）', async () => {
+  const { summary } = await runRoundtable({
+    agents: ['dsh'],
+    question: 'q',
+    chair: 'dsh',
+    askAgent: async (agent) => ({ agent, ok: true, text: 'ok' }),
+  });
+  assert.equal(summary.ok, true);
+  assert.equal(summary.timedOut, undefined);
+});
+
 test('圆桌：先并行各自回答，再由主持人汇总；失败的成员不阻断整轮', async () => {
   const seen = [];
   const phases = [];

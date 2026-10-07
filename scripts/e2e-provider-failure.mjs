@@ -5,13 +5,14 @@
 // 可执行文件指向一个"可控坏掉"的假 provider，然后逐种失败模式打真实 HTTP 请求。
 // 验证三件事：①失败必须被如实报出来，不能伪装成成功；②中台不能被拖死或崩掉；
 // ③失败状态要落到板级状态帧上（Failed = 红灯），这条不需要插板子也能验。
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
+const FIXTURE_PROVIDER = path.join(ROOT, 'scripts', 'fixtures', 'fake-provider.mjs');
 const startedAt = new Date().toISOString();
 const checks = [];
 
@@ -22,37 +23,15 @@ function check(name, passed, detail = '') {
 
 const dir = await mkdtemp(path.join(tmpdir(), 'relaydeck-provider-'));
 const modeFile = path.join(dir, 'mode.txt');
+const counterFile = path.join(dir, 'victim-taken');
 const fakeProvider = path.join(dir, 'fake-mmx.mjs');
 const port = 19000 + Math.floor(Math.random() * 2000);
 
-// 假 provider：行为完全由 mode 文件决定
-// 注意：必须带 shebang 且可执行——适配器是直接 spawn 这个文件的，
-// 否则会走"无法启动"分支，整个矩阵都会得到同一个（错误的）结论。
-await writeFile(
-  fakeProvider,
-  `#!/usr/bin/env node
-import { readFileSync } from 'node:fs';
-const mode = readFileSync(process.env.FAKE_MODE_FILE, 'utf8').trim();
-const ok = JSON.stringify({
-  content: [{ type: 'text', text: '一切正常' }],
-  usage: { input_tokens: 5, output_tokens: 3 },
-  stop_reason: 'end_turn',
-  base_resp: { status_code: 0 },
-});
-const chunks = [];
-process.stdin.on('data', (c) => chunks.push(c));
-process.stdin.on('end', async () => {
-  if (mode === 'hang') { setTimeout(() => {}, 120000); return; }                       // 上游挂住不回
-  if (mode === 'slow-ok') { await new Promise((r) => setTimeout(r, 900)); console.log(ok); return; } // 慢但成功
-  if (mode === 'garbage') { process.stdout.write('{"content":[{"type":"text","text":"这段被截断'); return; } // 输出半截
-  if (mode === 'rate-limited') { console.error('Error: 429 rate limited by upstream'); return; }      // 限流
-  if (mode === 'empty') { console.log(JSON.stringify({ content: [], base_resp: { status_code: 0 } })); return; } // 空回答
-  if (mode === 'crash') { process.exit(3); }                                           // 直接崩
-  console.log(ok);
-});
-`,
-  { mode: 0o755 },
-);
+// 假 provider 是仓库里的真实文件（scripts/fixtures/fake-provider.mjs），
+// 这里只负责拷进临时目录并加执行位——
+// 之前用字符串模板"生成代码"，被 JS 模板字符串的转义坑了两次（写出真换行 → 语法错误）。
+await copyFile(FIXTURE_PROVIDER, fakeProvider);
+await chmod(fakeProvider, 0o755);
 
 const server = spawn(process.execPath, ['server.mjs'], {
   cwd: ROOT,
@@ -63,7 +42,12 @@ const server = spawn(process.execPath, ['server.mjs'], {
     RELAYDECK_HID_BRIDGE: '0', // 明确关掉实板桥：本脚本绝不碰设备
     RELAYDECK_TIMEOUT: '2500', // 让"挂住"这一档快速进入超时分支
     RELAYDECK_MMX_BIN: fakeProvider,
+    RELAYDECK_DSH_BIN: fakeProvider,
+    RELAYDECK_CODEX_BIN: fakeProvider,
+    RELAYDECK_CHAIR: 'dsh',
+    RELAYDECK_MEMBER_TIMEOUT_MS: '800',
     FAKE_MODE_FILE: modeFile,
+    FAKE_COUNTER_FILE: counterFile,
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -183,12 +167,84 @@ try {
   results.push({ mode: 'slow-ok', ok: recovered?.ok, text: recovered?.text, boardState: frameAfter?.stateName });
 
   check('上游很慢但最终成功 → 不误判为失败', recovered?.ok === true);
+
+  // —— 圆桌：三个成员全离线，其中一个故意挂住 ——
+  // 没有成员超时的话这一轮会一直等到轮次总超时（180s）；有了它应当在 1s 量级结束。
+  await writeFile(modeFile, 'hang-one\n');
+  await rm(counterFile, { force: true });
+
+  const started = Date.now();
+  const roundtableRes = await fetch(`${BASE}/api/roundtable`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question: '纯离线圆桌测试', agents: ['dsh', 'codex', 'minimax'], chair: 'dsh' }),
+  });
+  const reader = roundtableRes.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let roundDone = null;
+  const phases = [];
+  for (;;) {
+    const { value, done: finished } = await reader.read();
+    if (finished) break;
+    buffer += decoder.decode(value, { stream: true });
+    let cut;
+    while ((cut = buffer.indexOf('\n\n')) >= 0) {
+      const chunk = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      let event = 'message';
+      let data = '';
+      for (const line of chunk.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) data += line.slice(5).trim();
+      }
+      if (!data) continue;
+      const payload = JSON.parse(data);
+      if (event === 'phase') phases.push(payload);
+      if (event === 'done') roundDone = payload;
+    }
+  }
+  const roundElapsed = Date.now() - started;
+
+  const timedOutMembers = (roundDone?.answers ?? []).filter((a) => a.timedOut);
+  check(
+    '圆桌：挂住的成员被判超时并跳过',
+    timedOutMembers.length === 1,
+    `超时成员=${timedOutMembers.map((a) => a.agent).join(',') || '无'}`,
+  );
+  check(
+    '圆桌：其他成员不受影响，照常有回答',
+    (roundDone?.answers ?? []).filter((a) => a.ok).length >= 2,
+    `成功 ${(roundDone?.answers ?? []).filter((a) => a.ok).length}/${(roundDone?.answers ?? []).length}`,
+  );
+  check('圆桌：主持人照常汇总', roundDone?.summary?.ok === true);
+  check(
+    '圆桌：整轮在秒级结束，而不是等满总超时',
+    roundElapsed < 15000,
+    `实际 ${roundElapsed}ms`,
+  );
+  check(
+    '圆桌：SSE 里能看到成员超时（timedOut 标记随 phase 推出）',
+    phases.some((phase) => phase.timedOut === true),
+    JSON.stringify(phases.filter((p) => p.phase === 'fanout.answer')),
+  );
+  results.push({
+    roundtable: {
+      elapsedMs: roundElapsed,
+      answers: (roundDone?.answers ?? []).map((a) => ({ agent: a.agent, ok: a.ok, timedOut: Boolean(a.timedOut) })),
+      summaryOk: roundDone?.summary?.ok,
+    },
+  });
 } catch (err) {
   check(`脚本本身执行失败：${err.message}`, false);
 } finally {
   server.kill('SIGTERM');
   await new Promise((resolve) => server.on('close', resolve));
-  await rm(dir, { recursive: true, force: true });
+  if (process.env.KEEP_TMP !== '1') {
+    await rm(dir, { recursive: true, force: true });
+  } else {
+    console.log(`[debug] 临时目录保留在：${dir}`);
+  }
 }
 
 const summary = {

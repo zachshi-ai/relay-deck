@@ -33,14 +33,15 @@
 | **实板 HID 工具** | ⏸ 暂停使用 | `tools/hidtool.swift` 已实测过一次（设备身份、Feature 写通路）；**板子正被另一门课占用，按要求不再对设备做任何操作** |
 | **中台 → 实板 桥** | ⏸ 默认关闭不启用 | `src/hardware/bridge.mjs` 已实现且有单测；**默认关闭**，只有显式设 `RELAYDECK_HID_BRIDGE=1` 才会写设备 |
 | 按 Agent 串行队列 | ✅ | `src/core/queue.mjs`（kimi 的 runner.lock 拒绝并发） |
+| **圆桌成员超时** | ✅ | 单个成员挂住到点判超时、跳过并掐掉它，整轮秒级结束（`RELAYDECK_MEMBER_TIMEOUT_MS`） |
 | **单条精确取消** | ✅ | 每轮有 runId + AbortController：`POST /api/cancel {runId\|agent\|all}`，取消不算失败、不触发自愈重试 |
 | **续跑线自愈** | ✅ | 坏 session 自动丢弃重跑，如实上报 `contextReset`（`src/core/session-recovery.mjs`） |
 | HTTP 层端到端验收 | ✅ | `evidence/http-e2e-*.json`：**11/11 项通过**（三组） |
 | 边界验证 | ✅ | `evidence/boundary-*.json`：**10/10**（坏焦点/未绑定输入/未知 Agent/spawn 失败/超时/并发） |
 | 会话失效自愈验收 | ✅ | `evidence/session-recovery-*.json`：**7/7** |
-| **上游失败矩阵** | ✅ | `scripts/e2e-provider-failure.mjs`：**19/19**（挂住/截断/429/空回答/崩溃/慢但成功，自起服务不碰设备） |
+| **上游失败矩阵** | ✅ | `scripts/e2e-provider-failure.mjs`：**24/24**（挂住/截断/429/空回答/崩溃/慢但成功 + 圆桌成员挂住，自起服务不碰设备） |
 | **精确取消验收** | ✅ | `scripts/e2e-cancel.mjs`：**10/10** |
-| 单元测试 | ✅ | **107 项**，fixture 全部来自真实抓取 |
+| 单元测试 | ✅ | **110 项**，fixture 全部来自真实抓取 |
 
 **跨 Agent 接力的真实验收长这样**：先让 `dsh` 回答出「已记住 42」，再把它的回答作为引用上下文接力给下游 Agent——下游自己的会话里从未出现过 42，它答出 `42`，证明接力上下文确实送达。
 对**没有续跑能力**的 Agent（MiniMax / Kimi）还会多验一轮：**不给接力上下文**再问一次，靠中台注入的历史答对，才算兜底真的生效。
@@ -131,7 +132,7 @@ server.mjs  ── 中台 ──────────────────
 ## 测试与验收
 
 ```bash
-node --test                              # 107 项单测
+node --test                              # 110 项单测
 node scripts/e2e-relay.mjs               # 真实接力（逐 Agent 验会话续跑）
 node scripts/e2e-http.mjs                # HTTP 层端到端：默认验 dsh → codex
 node scripts/e2e-http.mjs dsh minimax    # 换一对验（含历史兜底那一轮）
