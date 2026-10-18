@@ -4,7 +4,9 @@
 
 > 第 8 课毕业大作业项目。设计取舍见 [charter.md](charter.md)，推进计划见 [plan.md](plan.md)，适配器契约见 [docs/adapter-contract.md](docs/adapter-contract.md)，四个 Agent 的接法见 [docs/agent-onboarding.md](docs/agent-onboarding.md)，实板接入清单见 [docs/hardware-stage2b.md](docs/hardware-stage2b.md)。
 >
-> **作品链接（公开可访问）**：<https://zachshi-ai.github.io/relay-deck/>
+> **在线演示（作品本体）**：<https://zachshi-ai.github.io/relay-deck/> —— 静态回放，数据来自真实运行录制
+>
+> **作业正文**：<https://zachshi-ai.github.io/relay-deck/doc/> ｜ **源码与证据**：<https://github.com/zachshi-ai/relay-deck>
 >
 > **提交用交付包**：[作业正文](交付/1-作业正文.md) · [证据清单](交付/2-证据清单.md) · [复现手册](交付/3-复现手册.md) · [提交前自检单](交付/4-提交前自检.md)
 >

@@ -4,7 +4,7 @@
 // 为什么需要：这种跨多轮、由脚本逐段改写的长文档最容易"漂移"——测试数、证据文件名、
 // 脚本名一旦对不上，评审照着查就会当场露馅。与其靠人肉核对，不如让机器每轮查一遍。
 import { existsSync } from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { execFile } from 'node:child_process';
@@ -100,7 +100,6 @@ for (const [source, binary] of pairs) {
     note(`${binary} 未编译（用 swiftc -O ${source} -o ${binary}）`);
     continue;
   }
-  const { stat } = await import('node:fs/promises');
   const [s, b] = await Promise.all([stat(sourcePath), stat(binaryPath)]);
   if (s.mtimeMs > b.mtimeMs) fail(`${source} 比 ${binary} 新，忘了重新编译`);
 }
@@ -109,7 +108,6 @@ for (const [source, binary] of pairs) {
 const sourceDoc = path.join(ROOT, '交付', '1-作业正文.md');
 const publishHtml = path.join(ROOT, '交付', '5-作业正文-网页版.html');
 if (existsSync(publishHtml) && existsSync(sourceDoc)) {
-  const { stat } = await import('node:fs/promises');
   const [src, html] = await Promise.all([stat(sourceDoc), stat(publishHtml)]);
   if (src.mtimeMs > html.mtimeMs) {
     fail('交付/5-作业正文-网页版.html 比作业正文旧，忘了重新生成（node scripts/build-publish-html.mjs）');
@@ -118,15 +116,42 @@ if (existsSync(publishHtml) && existsSync(sourceDoc)) {
   }
 }
 
-// —— 8. 线上发布物 (index.html) 必须与网页版正文一致 ——
-const published = path.join(ROOT, 'index.html');
-if (existsSync(published) && existsSync(publishHtml)) {
-  const { readFile } = await import('node:fs/promises');
-  const [a, b] = await Promise.all([readFile(published), readFile(publishHtml)]);
+// —— 8. 线上发布物必须与源一致 ——
+// 站点结构：/ = 在线演示（作品本体），/doc/ = 作业正文，/demo/data.json = 录制的演示数据
+const publishedDoc = path.join(ROOT, 'doc', 'index.html');
+if (existsSync(publishedDoc) && existsSync(publishHtml)) {
+  const [a, b] = await Promise.all([readFile(publishedDoc), readFile(publishHtml)]);
   if (a.equals(b)) {
-    note('index.html（GitHub Pages 发布物）与网页版正文一致');
+    note('doc/index.html（线上作业正文）与网页版正文一致');
   } else {
-    fail('index.html 与 交付/5-作业正文-网页版.html 不一致——线上会发旧版本，请重新 cp 并 push');
+    fail('doc/index.html 与 交付/5-作业正文-网页版.html 不一致——线上会发旧版本，请重新 cp');
+  }
+}
+
+const publishedIndex = path.join(ROOT, 'index.html');
+if (!existsSync(publishedIndex)) {
+  fail('缺少站点入口 index.html（应为在线演示页）');
+} else {
+  const indexText = await readFile(publishedIndex, 'utf8');
+  if (indexText.includes('demo/demo.js') && indexText.includes('在线演示')) {
+    note('站点入口 index.html 是在线演示页');
+  } else {
+    fail('index.html 不像是演示页（应引用 demo/demo.js）——作品链接打开会看不到作品');
+  }
+}
+
+const demoData = path.join(ROOT, 'demo', 'data.json');
+if (!existsSync(demoData)) {
+  fail('缺少 demo/data.json（演示数据），跑 node scripts/build-demo.mjs');
+} else {
+  const [demoStat, storeStat] = await Promise.all([
+    stat(demoData),
+    stat(path.join(ROOT, 'data', 'store.jsonl')).catch(() => null),
+  ]);
+  if (storeStat && storeStat.mtimeMs > demoStat.mtimeMs) {
+    fail('data/store.jsonl 比 demo/data.json 新——演示数据过期，重新跑 node scripts/build-demo.mjs');
+  } else {
+    note('演示数据与录制数据同步');
   }
 }
 
