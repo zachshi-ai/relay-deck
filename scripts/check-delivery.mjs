@@ -118,6 +118,18 @@ if (existsSync(publishHtml) && existsSync(sourceDoc)) {
   }
 }
 
+// —— 8. 线上发布物 (index.html) 必须与网页版正文一致 ——
+const published = path.join(ROOT, 'index.html');
+if (existsSync(published) && existsSync(publishHtml)) {
+  const { readFile } = await import('node:fs/promises');
+  const [a, b] = await Promise.all([readFile(published), readFile(publishHtml)]);
+  if (a.equals(b)) {
+    note('index.html（GitHub Pages 发布物）与网页版正文一致');
+  } else {
+    fail('index.html 与 交付/5-作业正文-网页版.html 不一致——线上会发旧版本，请重新 cp 并 push');
+  }
+}
+
 // —— 输出 ——
 console.log('=== 交付物一致性校验 ===');
 if (actualTests !== null) console.log(`真实单测数：${actualTests}`);
